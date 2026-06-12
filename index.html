@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>CUBE RUNNER ∕∕ 2026</title>
+<style>
+  :root {
+    --bg: #07080d;
+    --ink: #f2f4ff;
+    --dim: rgba(242,244,255,.45);
+    --accent: #ff3d2e;
+    --accent2: #ffd23f;
+    --glow: 0 0 24px rgba(255,61,46,.35);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; overflow:hidden; background:var(--bg); font-family:"Azeret Mono","SF Mono",ui-monospace,monospace; color:var(--ink); touch-action:none; user-select:none; -webkit-user-select:none; }
+  #stage { position:fixed; inset:0; }
+  canvas { display:block; }
+
+  /* ---------- HUD ---------- */
+  #hud {
+    position:fixed; top:0; left:0; right:0;
+    padding:calc(env(safe-area-inset-top, 0px) + 14px) 18px 0;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    pointer-events:none; z-index:10;
+    opacity:0; transition:opacity .5s ease;
+  }
+  #hud.on { opacity:1; }
+  .stat { line-height:1; }
+  .stat .label { font-size:9px; letter-spacing:.28em; color:var(--dim); text-transform:uppercase; margin-bottom:6px; }
+  .stat .value { font-size:26px; font-weight:600; font-variant-numeric:tabular-nums; letter-spacing:.04em; }
+  .stat.right { text-align:right; }
+  #speedo {
+    position:fixed; left:0; right:0; top:calc(env(safe-area-inset-top,0px) + 8px);
+    display:flex; justify-content:center; pointer-events:none; z-index:10;
+    opacity:0; transition:opacity .5s;
+  }
+  #speedo.on { opacity:1; }
+  #speedo .pill {
+    font-size:10px; letter-spacing:.3em; color:var(--dim); text-transform:uppercase;
+    padding:6px 14px; border:1px solid rgba(242,244,255,.12); border-radius:999px;
+    backdrop-filter: blur(8px); background:rgba(7,8,13,.25);
+  }
+  #speedo .pill b { color:var(--accent2); font-weight:600; }
+
+  /* ---------- Overlays ---------- */
+  .overlay {
+    position:fixed; inset:0; z-index:20;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:radial-gradient(120% 90% at 50% 0%, rgba(20,24,46,.92), rgba(7,8,13,.96));
+    backdrop-filter: blur(6px);
+    text-align:center; padding:32px;
+    transition:opacity .45s ease, visibility .45s;
+  }
+  .overlay.hidden { opacity:0; visibility:hidden; pointer-events:none; }
+
+  .kicker { font-size:10px; letter-spacing:.5em; color:var(--accent2); text-transform:uppercase; margin-bottom:14px; }
+  h1 {
+    font-size:clamp(44px, 12vw, 88px); font-weight:700; letter-spacing:-.02em; line-height:.92;
+    text-transform:uppercase;
+  }
+  h1 .thin { display:block; font-weight:200; color:var(--dim); font-size:.42em; letter-spacing:.42em; margin-top:10px; }
+  .rule { width:56px; height:2px; background:var(--accent); margin:26px auto; box-shadow:var(--glow); }
+  .copy { font-size:12px; line-height:1.8; color:var(--dim); max-width:300px; letter-spacing:.04em; }
+  .copy b { color:var(--ink); font-weight:600; }
+
+  .btn {
+    margin-top:30px; cursor:pointer; pointer-events:auto;
+    font-family:inherit; font-size:13px; letter-spacing:.32em; text-transform:uppercase; font-weight:600;
+    color:var(--bg); background:var(--ink);
+    border:none; padding:18px 44px 18px 48px; border-radius:999px;
+    box-shadow:0 0 0 1px rgba(242,244,255,.25), 0 18px 50px -12px rgba(255,61,46,.45);
+    transition:transform .15s ease, box-shadow .2s;
+  }
+  .btn:active { transform:scale(.96); }
+  .btn.ghost { background:transparent; color:var(--dim); box-shadow:0 0 0 1px rgba(242,244,255,.2); margin-top:14px; padding:13px 32px 13px 36px; font-size:11px; }
+
+  #deathScore { font-size:clamp(56px,18vw,120px); font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
+  #deathBest { margin-top:10px; font-size:11px; letter-spacing:.3em; color:var(--dim); text-transform:uppercase; }
+  #deathBest.newbest { color:var(--accent2); animation:pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity:.4; } }
+
+  /* tilt indicator on start screen */
+  #tiltDemo { margin-top:34px; width:120px; height:6px; border-radius:3px; background:rgba(242,244,255,.12); position:relative; }
+  #tiltDemo::after {
+    content:""; position:absolute; top:-5px; width:16px; height:16px; border-radius:50%;
+    background:var(--accent); box-shadow:var(--glow);
+    animation:slide 2.4s ease-in-out infinite;
+  }
+  @keyframes slide { 0%,100% { left:0; } 50% { left:104px; } }
+
+  /* vignette + damage flash */
+  #vignette { position:fixed; inset:0; pointer-events:none; z-index:5;
+    background:radial-gradient(80% 70% at 50% 55%, transparent 55%, rgba(0,0,0,.5)); }
+  #flash { position:fixed; inset:0; pointer-events:none; z-index:15; background:var(--accent); opacity:0; }
+  #flash.hit { animation:flash .5s ease-out; }
+  @keyframes flash { 0% { opacity:.7; } 100% { opacity:0; } }
+
+  /* milestone toast */
+  #toast {
+    position:fixed; left:50%; top:26%; transform:translate(-50%,-50%) scale(.9);
+    z-index:12; pointer-events:none; opacity:0;
+    font-size:13px; letter-spacing:.45em; text-transform:uppercase; color:var(--accent2);
+    text-shadow:0 0 30px rgba(255,210,63,.6);
+  }
+  #toast.show { animation:toast 1.6s ease forwards; }
+  @keyframes toast { 12% { opacity:1; transform:translate(-50%,-50%) scale(1); } 80% { opacity:1; } 100% { opacity:0; transform:translate(-50%,-58%) scale(1.02); } }
+
+  .foot { position:fixed; bottom:calc(env(safe-area-inset-bottom,0px) + 16px); left:0; right:0; text-align:center; font-size:9px; letter-spacing:.3em; color:rgba(242,244,255,.25); text-transform:uppercase; pointer-events:none; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="vignette"></div>
+<div id="flash"></div>
+
+<div id="hud">
+  <div class="stat"><div class="label">Score</div><div class="value" id="score">000000</div></div>
+  <div class="stat right"><div class="label">Best</div><div class="value" id="best">000000</div></div>
+</div>
+<div id="speedo"><div class="pill">VEL <b id="vel">1.0</b>×</div></div>
+<div id="toast">Velocity Up</div>
+
+<!-- START -->
+<div class="overlay" id="startScreen">
+  <div class="kicker">EBP // Arcade</div>
+  <h1>Cube<br>Runner<span class="thin">twenty&nbsp;twenty&nbsp;six</span></h1>
+  <div class="rule"></div>
+  <p class="copy"><b>Tilt</b> your phone to steer.<br>Dodge the field. It only gets faster.<br>On desktop, use <b>← →</b> or drag.</p>
+  <div id="tiltDemo"></div>
+  <button class="btn" id="startBtn">Run</button>
+  <div id="tiltStatus" style="margin-top:18px;font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--dim);">Tilt: waiting for sensor</div>
+</div>
+
+<!-- DEATH -->
+<div class="overlay hidden" id="deathScreen">
+  <div class="kicker">Impact</div>
+  <div id="deathScore">000000</div>
+  <div id="deathBest">Best 000000</div>
+  <div class="rule"></div>
+  <button class="btn" id="retryBtn">Again</button>
+</div>
+
+<div class="foot">Cube Runner · 2026</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+  // ============================================================
+  // CUBE RUNNER 2026 — single-file Three.js arcade dodger
+  // Tilt (DeviceOrientation) + keyboard + touch-drag steering
+  // ============================================================
+
+  const stage = document.getElementById('stage');
+  const ui = {
+    score: document.getElementById('score'),
+    best: document.getElementById('best'),
+    vel: document.getElementById('vel'),
+    hud: document.getElementById('hud'),
+    speedo: document.getElementById('speedo'),
+    start: document.getElementById('startScreen'),
+    death: document.getElementById('deathScreen'),
+    deathScore: document.getElementById('deathScore'),
+    deathBest: document.getElementById('deathBest'),
+    startBtn: document.getElementById('startBtn'),
+    retryBtn: document.getElementById('retryBtn'),
+    flash: document.getElementById('flash'),
+    toast: document.getElementById('toast'),
+  };
+
+  // ---------- Renderer / Scene ----------
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  stage.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const SKY_TOP = new THREE.Color('#1b2a6b');
+  const SKY_BOT = new THREE.Color('#0a0d1f');
+  scene.fog = new THREE.Fog(0x0a0d1f, 60, 240);
+
+  const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 600);
+  camera.position.set(0, 3.2, 0);
+
+  // gradient sky dome
+  const skyGeo = new THREE.SphereGeometry(420, 16, 12);
+  const skyMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false,
+    uniforms: { top: { value: SKY_TOP }, bot: { value: SKY_BOT } },
+    vertexShader: `varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+    fragmentShader: `varying vec3 vP; uniform vec3 top; uniform vec3 bot;
+      void main(){ float h = normalize(vP).y * .5 + .5; gl_FragColor = vec4(mix(bot, top, smoothstep(.05,.75,h)), 1.0); }`
+  });
+  scene.add(new THREE.Mesh(skyGeo, skyMat));
+
+  // ground — huge plane with subtle grid shader
+  const groundMat = new THREE.ShaderMaterial({
+    uniforms: { uScroll: { value: 0 }, fogColor: { value: new THREE.Color(0x0a0d1f) }, fogNear: { value: 60 }, fogFar: { value: 240 } },
+    vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }`,
+    fragmentShader: `
+      varying vec3 vW; uniform float uScroll;
+      uniform vec3 fogColor; uniform float fogNear; uniform float fogFar;
+      void main(){
+        vec3 base = vec3(.055,.065,.105);
+        vec2 g = abs(fract(vec2(vW.x, vW.z + uScroll) / 8.0) - .5);
+        float line = smoothstep(.48,.5,max(g.x,g.y));
+        vec3 col = mix(base, vec3(.16,.19,.34), line*.7);
+        float d = length(vW.xz - vec2(0.,0.));
+        float f = smoothstep(fogNear, fogFar, length(vW - cameraPosition));
+        gl_FragColor = vec4(mix(col, fogColor, f), 1.0);
+      }`
+  });
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  scene.add(ground);
+
+  // lights
+  scene.add(new THREE.HemisphereLight(0x8aa0ff, 0x10131f, 0.9));
+  const sun = new THREE.DirectionalLight(0xfff2dd, 1.1);
+  sun.position.set(-30, 60, -40);
+  scene.add(sun);
+
+  // ---------- Cube field (instanced) ----------
+  const PALETTE = [0xff3d2e, 0xff3d2e, 0xffd23f, 0xff7a1a, 0xe8e9f0]; // red-heavy, classic
+  const CUBE_COUNT = 320;
+  const SPAWN_DEPTH = 280;     // how far ahead cubes live
+  const FIELD_HALF = 95;       // lateral half-width of the field
+
+  const cubeGeo = new THREE.BoxGeometry(1, 1, 1);
+  const cubeMat = new THREE.MeshLambertMaterial({});
+  const cubes = new THREE.InstancedMesh(cubeGeo, cubeMat, CUBE_COUNT);
+  cubes.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  scene.add(cubes);
+
+  const dummy = new THREE.Object3D();
+  const color = new THREE.Color();
+  // per-cube state
+  const C = new Array(CUBE_COUNT).fill(0).map(() => ({ x:0, z:0, s:1, y:0, spin:0, rot:0 }));
+
+  function densityForScore(s) {
+    // fraction of pool active: ramps from 35% → 100%
+    return Math.min(1, 0.35 + s / 900);
+  }
+
+  function respawnCube(i, zBase, initial) {
+    const c = C[i];
+    c.s = 2.2 + Math.random() * 4.2;                       // size
+    c.x = (Math.random() * 2 - 1) * FIELD_HALF;
+    c.z = zBase - Math.random() * SPAWN_DEPTH;
+    c.y = c.s / 2;
+    c.rot = Math.random() * Math.PI;
+    c.spin = (Math.random() - .5) * (Math.random() < .15 ? 1.5 : 0); // some cubes slowly spin
+    if (initial && Math.abs(c.x) < 6 && c.z > -40) c.x += 18 * Math.sign(c.x || 1); // clear launch corridor
+    color.setHex(PALETTE[(Math.random() * PALETTE.length) | 0]);
+    cubes.setColorAt(i, color);
+  }
+
+  // ---------- Player arrow (chevron) ----------
+  const player = new THREE.Group();
+  const arrowShape = new THREE.Shape();
+  arrowShape.moveTo(0, 1.4); arrowShape.lineTo(1.0, -0.9); arrowShape.lineTo(0, -0.25);
+  arrowShape.lineTo(-1.0, -0.9); arrowShape.closePath();
+  const arrowGeo = new THREE.ExtrudeGeometry(arrowShape, { depth: 0.22, bevelEnabled: true, bevelThickness: .06, bevelSize: .06, bevelSegments: 2 });
+  const arrowMat = new THREE.MeshStandardMaterial({ color: 0xf2f4ff, metalness: .65, roughness: .25, emissive: 0x232838, emissiveIntensity: .6 });
+  const arrow = new THREE.Mesh(arrowGeo, arrowMat);
+  arrow.rotation.x = -Math.PI / 2;
+  player.add(arrow);
+  // glow ring under arrow
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(1.15, 1.5, 40),
+    new THREE.MeshBasicMaterial({ color: 0xff3d2e, transparent: true, opacity: .35, side: THREE.DoubleSide })
+  );
+  ring.rotation.x = -Math.PI / 2; ring.position.y = .04;
+  player.add(ring);
+  player.position.set(0, 0.5, -7.5);
+  scene.add(player);
+
+  // speed-line particles for velocity feel
+  const LINES = 90;
+  const lineGeo = new THREE.BufferGeometry();
+  const linePos = new Float32Array(LINES * 6);
+  lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
+  const lineMat = new THREE.LineBasicMaterial({ color: 0x9aa6ff, transparent: true, opacity: 0.0 });
+  const speedLines = new THREE.LineSegments(lineGeo, lineMat);
+  scene.add(speedLines);
+  const L = new Array(LINES).fill(0).map(() => ({ x:0, y:0, z:0 }));
+  function resetLine(i, deep) {
+    L[i].x = (Math.random()*2-1) * 40;
+    L[i].y = 1 + Math.random() * 16;
+    L[i].z = -(deep ? Math.random()*200 : 200 + Math.random()*40);
+  }
+  L.forEach((_, i) => resetLine(i, true));
+
+  // ---------- Game state ----------
+  const state = {
+    running: false,
+    score: 0,
+    best: 0,
+    speed: 0,         // world units / sec
+    baseSpeed: 38,
+    maxSpeed: 150,
+    px: 0,            // player x
+    targetX: 0,
+    tilt: 0,          // -1..1 steering input
+    scroll: 0,
+    lastMilestone: 0,
+    shake: 0,
+    t: 0,
+  };
+
+  // best score persistence (artifact storage w/ in-memory fallback)
+  async function loadBest() {
+    try {
+      const r = await window.storage.get('cube-runner-best');
+      if (r && r.value) state.best = parseInt(r.value, 10) || 0;
+    } catch (e) { /* first run / unavailable */ }
+    ui.best.textContent = fmt(state.best);
+  }
+  async function saveBest() {
+    try { await window.storage.set('cube-runner-best', String(state.best)); } catch (e) {}
+  }
+
+  const fmt = n => String(Math.floor(n)).padStart(6, '0');
+
+  // ---------- Input: tilt ----------
+  let tiltZero = null;            // calibration offset (degrees)
+  let lastTiltDeg = 0;            // most recent raw tilt reading
+  let hasTilt = false;            // any sensor data received?
+  let tiltSource = 'none';        // 'orientation' | 'motion' | 'none'
+  const tiltStatusEl = document.getElementById('tiltStatus');
+
+  function setTiltStatus(msg, ok) {
+    if (!tiltStatusEl) return;
+    tiltStatusEl.textContent = msg;
+    tiltStatusEl.style.color = ok ? 'var(--accent2)' : 'var(--dim)';
+  }
+
+  // current screen rotation in degrees: 0, 90, 180, -90/270
+  function screenAngle() {
+    if (screen.orientation && typeof screen.orientation.angle === 'number') return screen.orientation.angle;
+    if (typeof window.orientation === 'number') return window.orientation;
+    return 0;
+  }
+
+  // map raw device angles to "lean left/right relative to current screen orientation"
+  function mapTiltDeg(beta, gamma) {
+    const a = ((screenAngle() % 360) + 360) % 360;
+    switch (a) {
+      case 90:  return beta;     // landscape, home button right
+      case 180: return -gamma;   // upside-down portrait
+      case 270: return -beta;    // landscape, home button left
+      default:  return gamma;    // portrait
+    }
+  }
+
+  function applyTilt(deg) {
+    hasTilt = true;
+    lastTiltDeg = deg;
+    if (tiltZero === null) tiltZero = deg;            // auto-calibrate on first reading
+    state.tilt = THREE.MathUtils.clamp((deg - tiltZero) / 26, -1, 1); // ±26° = full lock
+  }
+
+  function handleOrientation(e) {
+    if (e.gamma === null && e.beta === null) return;  // some browsers fire empty events
+    if (tiltSource === 'none') { tiltSource = 'orientation'; setTiltStatus('Tilt: active', true); }
+    if (tiltSource !== 'orientation') return;          // orientation wins over motion
+    applyTilt(mapTiltDeg(e.beta || 0, e.gamma || 0));
+  }
+
+  // fallback: derive lean angle from gravity vector (devicemotion)
+  function handleMotion(e) {
+    if (tiltSource === 'orientation') return;
+    const g = e.accelerationIncludingGravity;
+    if (!g || (g.x === null && g.y === null)) return;
+    if (tiltSource === 'none') { tiltSource = 'motion'; setTiltStatus('Tilt: active (motion)', true); }
+    // angle of gravity in the screen plane → degrees of lean
+    const beta  = Math.atan2(-g.y, -g.z) * 180 / Math.PI;
+    const gamma = Math.atan2(-g.x, Math.sqrt(g.y * g.y + g.z * g.z) || 1) * 180 / Math.PI;
+    applyTilt(mapTiltDeg(beta, gamma));
+  }
+
+  let tiltRequested = false;
+  async function enableTilt() {
+    if (tiltRequested) return;
+    tiltRequested = true;
+    try {
+      // iOS 13+: must be called directly from a user gesture, separately for each API
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const res = await DeviceOrientationEvent.requestPermission();
+        if (res !== 'granted') { setTiltStatus('Tilt: denied — drag to steer', false); }
+      }
+      if (typeof DeviceMotionEvent !== 'undefined' &&
+          typeof DeviceMotionEvent.requestPermission === 'function') {
+        try { await DeviceMotionEvent.requestPermission(); } catch (e) {}
+      }
+    } catch (e) {
+      setTiltStatus('Tilt: blocked here — drag to steer', false);
+    }
+    window.addEventListener('deviceorientation', handleOrientation, true);
+    window.addEventListener('devicemotion', handleMotion, true);
+    // if nothing arrives in 1.5s, sensors are unavailable (e.g. sandboxed iframe, desktop)
+    setTimeout(() => {
+      if (!hasTilt) setTiltStatus('Tilt: unavailable — drag or use arrows', false);
+    }, 1500);
+  }
+
+  // recalibrate neutral grip whenever the phone is rotated portrait ⇄ landscape
+  function onRotate() {
+    tiltZero = null;            // next reading becomes the new neutral
+    state.tilt = 0;
+  }
+  if (screen.orientation && screen.orientation.addEventListener) {
+    screen.orientation.addEventListener('change', onRotate);
+  } else {
+    window.addEventListener('orientationchange', onRotate);
+  }
+
+  // ---------- Input: keys ----------
+  const keys = {};
+  addEventListener('keydown', e => { keys[e.key] = true; if (e.key === ' ' && !state.running && ui.start.classList.contains('hidden')) restart(); });
+  addEventListener('keyup', e => keys[e.key] = false);
+
+  // ---------- Input: touch drag (fallback steering) ----------
+  let dragX = null;
+  addEventListener('touchstart', e => { if (state.running) dragX = e.touches[0].clientX; }, { passive: true });
+  addEventListener('touchmove', e => {
+    if (!state.running || dragX === null) return;
+    const dx = e.touches[0].clientX - dragX;
+    state.tilt = THREE.MathUtils.clamp(dx / (innerWidth * .28), -1, 1);
+  }, { passive: true });
+  addEventListener('touchend', () => { dragX = null; if (!hasTilt) state.tilt = 0; });
+
+  // ---------- Lifecycle ----------
+  function resetWorld() {
+    state.score = 0;
+    state.speed = state.baseSpeed;
+    state.px = 0; state.targetX = 0;
+    state.scroll = 0; state.lastMilestone = 0; state.shake = 0;
+    tiltZero = hasTilt ? lastTiltDeg : null;   // recalibrate to current grip
+    for (let i = 0; i < CUBE_COUNT; i++) respawnCube(i, -20, true);
+    if (cubes.instanceColor) cubes.instanceColor.needsUpdate = true;
+    ui.score.textContent = fmt(0);
+    ui.vel.textContent = '1.0';
+  }
+
+  function start() {
+    enableTilt();
+    resetWorld();
+    ui.start.classList.add('hidden');
+    ui.death.classList.add('hidden');
+    ui.hud.classList.add('on');
+    ui.speedo.classList.add('on');
+    state.running = true;
+  }
+  const restart = start;
+
+  function die() {
+    state.running = false;
+    state.shake = 1;
+    ui.flash.classList.remove('hit'); void ui.flash.offsetWidth; ui.flash.classList.add('hit');
+    if (navigator.vibrate) navigator.vibrate([60, 40, 120]);
+    const isBest = state.score > state.best;
+    if (isBest) { state.best = Math.floor(state.score); saveBest(); }
+    ui.best.textContent = fmt(state.best);
+    ui.deathScore.textContent = fmt(state.score);
+    ui.deathBest.textContent = (isBest ? '★ New Best ' : 'Best ') + fmt(state.best);
+    ui.deathBest.classList.toggle('newbest', isBest);
+    setTimeout(() => ui.death.classList.remove('hidden'), 420);
+  }
+
+  ui.startBtn.addEventListener('click', start);
+  ui.retryBtn.addEventListener('click', restart);
+
+  // ---------- Milestone toast ----------
+  function toast(msg) {
+    ui.toast.textContent = msg;
+    ui.toast.classList.remove('show'); void ui.toast.offsetWidth;
+    ui.toast.classList.add('show');
+  }
+
+  // ---------- Main loop ----------
+  const clock = new THREE.Clock();
+  const camBase = new THREE.Vector3(0, 3.2, 0);
+
+  function frame() {
+    requestAnimationFrame(frame);
+    const dt = Math.min(clock.getDelta(), 1 / 20);
+    state.t += dt;
+
+    if (state.running) {
+      // --- difficulty ramp: speed grows continuously, eases toward max
+      const ramp = 1 - Math.exp(-state.score / 220);            // 0→1
+      state.speed = state.baseSpeed + (state.maxSpeed - state.baseSpeed) * ramp;
+      const velMult = state.speed / state.baseSpeed;
+      ui.vel.textContent = velMult.toFixed(1);
+
+      // milestone toasts every 100 pts
+      const ms = Math.floor(state.score / 100);
+      if (ms > state.lastMilestone) { state.lastMilestone = ms; toast('Velocity ' + velMult.toFixed(1) + '×'); if (navigator.vibrate) navigator.vibrate(20); }
+
+      // --- steering
+      let steer = state.tilt;
+      if (keys['ArrowLeft'] || keys['a']) steer = -1;
+      if (keys['ArrowRight'] || keys['d']) steer = 1;
+      const steerSpeed = 42 + velMult * 10;                      // handling scales w/ speed
+      state.px = THREE.MathUtils.clamp(state.px + steer * steerSpeed * dt, -FIELD_HALF + 4, FIELD_HALF - 4);
+
+      // --- score = distance
+      state.score += state.speed * dt * 0.18;
+      ui.score.textContent = fmt(state.score);
+
+      // --- move cube field toward player
+      const dz = state.speed * dt;
+      state.scroll += dz;
+      groundMat.uniforms.uScroll.value = state.scroll;
+      const density = densityForScore(state.score);
+      const activeCount = Math.floor(CUBE_COUNT * density);
+
+      for (let i = 0; i < CUBE_COUNT; i++) {
+        const c = C[i];
+        c.z += dz;
+        if (c.z > 6) {
+          respawnCube(i, -SPAWN_DEPTH + (c.z - 6) % 40, false);
+          // lightly bias new cubes toward player lane as difficulty rises
+          if (Math.random() < 0.25 * density) c.x = THREE.MathUtils.clamp(state.px + (Math.random()*2-1)*30, -FIELD_HALF, FIELD_HALF);
+          if (cubes.instanceColor) cubes.instanceColor.needsUpdate = true;
+        }
+        c.rot += c.spin * dt;
+
+        const hidden = i >= activeCount;
+        dummy.position.set(c.x - state.px, hidden ? -50 : c.y, c.z);
+        dummy.rotation.set(0, c.rot, 0);
+        dummy.scale.setScalar(c.s);
+        dummy.updateMatrix();
+        cubes.setMatrixAt(i, dummy.matrix);
+
+        // --- collision (AABB vs player point w/ radius)
+        if (!hidden) {
+          const half = c.s / 2;
+          const px = 0, pz = player.position.z;           // player is at x=0 in world (field shifts)
+          if (Math.abs(c.x - state.px - px) < half + 0.85 &&
+              Math.abs(c.z - pz) < half + 0.85) {
+            die();
+          }
+        }
+      }
+      cubes.instanceMatrix.needsUpdate = true;
+
+      // --- speed lines
+      lineMat.opacity = THREE.MathUtils.clamp((velMult - 1.4) * 0.25, 0, 0.5);
+      for (let i = 0; i < LINES; i++) {
+        L[i].z += dz * 1.6;
+        if (L[i].z > 4) resetLine(i, false);
+        const o = i * 6, len = 2 + velMult * 1.5;
+        linePos[o] = L[i].x - state.px * .4; linePos[o+1] = L[i].y; linePos[o+2] = L[i].z;
+        linePos[o+3] = linePos[o];           linePos[o+4] = L[i].y; linePos[o+5] = L[i].z - len;
+      }
+      lineGeo.attributes.position.needsUpdate = true;
+    }
+
+    // --- player visuals (always animate a bit)
+    const bank = THREE.MathUtils.lerp(player.rotation.z, -state.tilt * 0.55, 0.18);
+    player.rotation.z = state.running ? bank : THREE.MathUtils.lerp(player.rotation.z, 0, .1);
+    player.position.y = 0.55 + Math.sin(state.t * 3.1) * 0.07;
+    ring.material.opacity = 0.28 + Math.sin(state.t * 5) * 0.08;
+
+    // --- camera: subtle lean + FOV stretch with speed + shake
+    const velMult = state.speed / state.baseSpeed || 1;
+    const targetFov = 72 + Math.min(18, (velMult - 1) * 6);
+    camera.fov = THREE.MathUtils.lerp(camera.fov, state.running ? targetFov : 72, 0.06);
+    camera.updateProjectionMatrix();
+    let sx = 0, sy = 0;
+    if (state.shake > 0.001) {
+      state.shake *= 0.88;
+      sx = (Math.random()-.5) * state.shake * 1.6;
+      sy = (Math.random()-.5) * state.shake * 1.6;
+    }
+    camera.position.set(camBase.x + state.tilt * -0.8 + sx, camBase.y + sy, camBase.z);
+    camera.rotation.z = THREE.MathUtils.lerp(camera.rotation.z, state.running ? state.tilt * 0.06 : 0, 0.1);
+
+    renderer.render(scene, camera);
+  }
+
+  // ---------- Resize ----------
+  addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+
+  // ---------- Boot ----------
+  for (let i = 0; i < CUBE_COUNT; i++) respawnCube(i, -20, true);
+  if (cubes.instanceColor) cubes.instanceColor.needsUpdate = true;
+  loadBest();
+  frame();
+})();
+</script>
+</body>
+</html>
