@@ -279,6 +279,139 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
+// ============================================================
+// AUDIO ENGINE — procedural techno, 90→180 BPM
+// ============================================================
+const Music = (() => {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  let ctx = null, master = null;
+  let muted = false, running = false, timerId = null;
+  let nextTime = 0, step = 0, barStep = 0;
+  let currentBPM = 90;
+  const AHEAD = 0.12;
+
+  //  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+  const KICK  = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0];
+  const SNARE = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
+  const OHAT  = [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0];
+  const CHAT  = [1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1];
+  const BASS_P= [1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0];
+  const BASS_F= [55,0, 0,55, 0, 0,73.4,0,55, 0, 0, 0, 0,82.4,0,0];
+  const PAD_CHORDS = [
+    [55, 65.4, 82.4],
+    [55, 65.4, 87.3],
+    [49, 61.7, 73.4],
+    [55, 65.4, 82.4],
+  ];
+
+  function kick(t) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(master);
+    o.frequency.setValueAtTime(160, t);
+    o.frequency.exponentialRampToValueAtTime(26, t + 0.44);
+    g.gain.setValueAtTime(2.0, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    o.start(t); o.stop(t + 0.55);
+  }
+
+  function snare(t) {
+    const len = Math.ceil(ctx.sampleRate * 0.18);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2800; bp.Q.value = 0.7;
+    const g = ctx.createGain();
+    src.connect(bp); bp.connect(g); g.connect(master);
+    g.gain.setValueAtTime(0.55, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    src.start(t); src.stop(t + 0.2);
+    const o = ctx.createOscillator(), g2 = ctx.createGain();
+    o.connect(g2); g2.connect(master); o.frequency.value = 190;
+    g2.gain.setValueAtTime(0.3, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+    o.start(t); o.stop(t + 0.09);
+  }
+
+  function hihat(t, open) {
+    const dur = open ? 0.13 : 0.038;
+    const vol = open ? 0.28 : 0.14;
+    const len = Math.ceil(ctx.sampleRate * (dur + 0.02));
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 8000;
+    const g = ctx.createGain();
+    src.connect(hp); hp.connect(g); g.connect(master);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.start(t); src.stop(t + dur + 0.01);
+  }
+
+  function bass(t, freq) {
+    const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = freq;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 290; lp.Q.value = 7;
+    const g = ctx.createGain();
+    o.connect(lp); lp.connect(g); g.connect(master);
+    g.gain.setValueAtTime(0.85, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.17);
+    o.start(t); o.stop(t + 0.2);
+  }
+
+  function pad(t) {
+    const chord = PAD_CHORDS[barStep % PAD_CHORDS.length]; barStep++;
+    const dur = (60 / currentBPM / 4) * 16;
+    chord.forEach(f => {
+      const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
+      const g = ctx.createGain();
+      o.connect(g); g.connect(master);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.055, t + 0.4);
+      g.gain.setValueAtTime(0.055, t + dur - 0.4);
+      g.gain.linearRampToValueAtTime(0, t + dur);
+      o.start(t); o.stop(t + dur + 0.01);
+    });
+  }
+
+  function scheduleStep(s, t) {
+    if (KICK[s])  kick(t);
+    if (SNARE[s]) snare(t);
+    if (OHAT[s])  hihat(t, true);
+    if (CHAT[s])  hihat(t, false);
+    if (BASS_P[s] && BASS_F[s]) bass(t, BASS_F[s]);
+    if (s === 0)  pad(t);
+  }
+
+  function tick() {
+    if (!running || !ctx) return;
+    while (nextTime < ctx.currentTime + AHEAD) {
+      scheduleStep(step, nextTime);
+      step = (step + 1) % 16;
+      nextTime += 60 / currentBPM / 4;
+    }
+  }
+
+  let currentVol = 0.55;
+  return {
+    start() {
+      if (!ctx) {
+        ctx = new AC();
+        master = ctx.createGain();
+        master.gain.value = currentVol;
+        master.connect(ctx.destination);
+      }
+      if (ctx.state === 'suspended') ctx.resume();
+      if (running) return;
+      currentBPM = 90;
+      running = true; step = 0; barStep = 0;
+      nextTime = ctx.currentTime + 0.08;
+      timerId = setInterval(tick, 20);
+    },
+    setSpeed(t) { currentBPM = 90 + t * 90; },
+    setVolume(v) {
+      currentVol = v;
+      if (master) master.gain.setTargetAtTime(v, ctx.currentTime, 0.04);
+    },
+  };
+})();
+
 (() => {
   const stage = document.getElementById('stage');
   const ui = {
@@ -1382,138 +1515,6 @@
   frame();
 })();
 
-// ============================================================
-// AUDIO ENGINE — procedural techno, 90→180 BPM
-// ============================================================
-const Music = (() => {
-  const AC = window.AudioContext || window.webkitAudioContext;
-  let ctx = null, master = null;
-  let muted = false, running = false, timerId = null;
-  let nextTime = 0, step = 0, barStep = 0;
-  let currentBPM = 90;
-  const AHEAD = 0.12;
-
-  //  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
-  const KICK  = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0];
-  const SNARE = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
-  const OHAT  = [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0];
-  const CHAT  = [1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1];
-  const BASS_P= [1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0];
-  const BASS_F= [55,0, 0,55, 0, 0,73.4,0,55, 0, 0, 0, 0,82.4,0,0];
-  const PAD_CHORDS = [
-    [55, 65.4, 82.4],
-    [55, 65.4, 87.3],
-    [49, 61.7, 73.4],
-    [55, 65.4, 82.4],
-  ];
-
-  function kick(t) {
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.connect(g); g.connect(master);
-    o.frequency.setValueAtTime(160, t);
-    o.frequency.exponentialRampToValueAtTime(26, t + 0.44);
-    g.gain.setValueAtTime(2.0, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-    o.start(t); o.stop(t + 0.55);
-  }
-
-  function snare(t) {
-    const len = Math.ceil(ctx.sampleRate * 0.18);
-    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-    const src = ctx.createBufferSource(); src.buffer = buf;
-    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2800; bp.Q.value = 0.7;
-    const g = ctx.createGain();
-    src.connect(bp); bp.connect(g); g.connect(master);
-    g.gain.setValueAtTime(0.55, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
-    src.start(t); src.stop(t + 0.2);
-    const o = ctx.createOscillator(), g2 = ctx.createGain();
-    o.connect(g2); g2.connect(master); o.frequency.value = 190;
-    g2.gain.setValueAtTime(0.3, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
-    o.start(t); o.stop(t + 0.09);
-  }
-
-  function hihat(t, open) {
-    const dur = open ? 0.13 : 0.038;
-    const vol = open ? 0.28 : 0.14;
-    const len = Math.ceil(ctx.sampleRate * (dur + 0.02));
-    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-    const src = ctx.createBufferSource(); src.buffer = buf;
-    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 8000;
-    const g = ctx.createGain();
-    src.connect(hp); hp.connect(g); g.connect(master);
-    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    src.start(t); src.stop(t + dur + 0.01);
-  }
-
-  function bass(t, freq) {
-    const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = freq;
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 290; lp.Q.value = 7;
-    const g = ctx.createGain();
-    o.connect(lp); lp.connect(g); g.connect(master);
-    g.gain.setValueAtTime(0.85, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.17);
-    o.start(t); o.stop(t + 0.2);
-  }
-
-  function pad(t) {
-    const chord = PAD_CHORDS[barStep % PAD_CHORDS.length]; barStep++;
-    const dur = (60 / currentBPM / 4) * 16;
-    chord.forEach(f => {
-      const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
-      const g = ctx.createGain();
-      o.connect(g); g.connect(master);
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(0.055, t + 0.4);
-      g.gain.setValueAtTime(0.055, t + dur - 0.4);
-      g.gain.linearRampToValueAtTime(0, t + dur);
-      o.start(t); o.stop(t + dur + 0.01);
-    });
-  }
-
-  function scheduleStep(s, t) {
-    if (KICK[s])  kick(t);
-    if (SNARE[s]) snare(t);
-    if (OHAT[s])  hihat(t, true);
-    if (CHAT[s])  hihat(t, false);
-    if (BASS_P[s] && BASS_F[s]) bass(t, BASS_F[s]);
-    if (s === 0)  pad(t);
-  }
-
-  function tick() {
-    if (!running || !ctx) return;
-    while (nextTime < ctx.currentTime + AHEAD) {
-      scheduleStep(step, nextTime);
-      step = (step + 1) % 16;
-      nextTime += 60 / currentBPM / 4;
-    }
-  }
-
-  let currentVol = 0.55;
-  return {
-    start() {
-      if (!ctx) {
-        ctx = new AC();
-        master = ctx.createGain();
-        master.gain.value = currentVol;
-        master.connect(ctx.destination);
-      }
-      if (ctx.state === 'suspended') ctx.resume();
-      if (running) return;
-      currentBPM = 90;
-      running = true; step = 0; barStep = 0;
-      nextTime = ctx.currentTime + 0.08;
-      timerId = setInterval(tick, 20);
-    },
-    setSpeed(t) { currentBPM = 90 + t * 90; },
-    setVolume(v) {
-      currentVol = v;
-      if (master) master.gain.setTargetAtTime(v, ctx.currentTime, 0.04);
-    },
-  };
-})();
 
 // M key — mute toggle via volume slider
 document.addEventListener('keydown', e => {
