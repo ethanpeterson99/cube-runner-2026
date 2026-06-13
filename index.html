@@ -687,9 +687,15 @@ const Music = (() => {
       ringColor: 0x66ccff, trailColor: 0xaad8ff, trailOpacity: 0.85,
       pattern: 'starfield', patA: '#060a2a', patB: '#bfe0ff', anim: 'pulse',
       swatchBg: 'radial-gradient(circle, #bfe0ff, #060a2a)' },
+    { id: 'leader', name: 'Leader', unlock: { type: 'leader', hint: 'Hold #1 on the leaderboard' },
+      color: 0xffe27a, emissive: 0xffb200, emissiveInt: 3.2, metalness: 1.0, roughness: 0.05,
+      ringColor: 0xffd23f, trailColor: 0xffcc33, trailOpacity: 0.9,
+      pattern: 'galaxy', patA: '#3a2600', patB: '#ffe87a', anim: 'pulse',
+      swatchBg: 'radial-gradient(circle, #fff3b0, #b87800)' },
   ];
   let activeSkinId = 'default';
   let unlockedSkins = new Set(['default']);
+  let leaderUnlocked = false, preLeaderSkin = null;   // #1-Leader skin is ephemeral (leaderboard-driven)
   let newSkinsThisRun = [];
   let skinPanelOpen = false;
   // per-run unlock trackers (reset in resetWorld)
@@ -815,7 +821,7 @@ const Music = (() => {
     if (state.grace <= 0) {
       const half = HALL_S / 2;
       if (Math.abs(x - state.px) < half + 0.85 && Math.abs(zRow - pz) < half + 0.85) {
-        if (pw.phaseT <= 0 && !tryShield()) die();
+        if (pw.phaseT <= 0 && pw.warpInvuln <= 0 && !tryShield()) die();
       }
     }
     return i + 1;
@@ -947,8 +953,8 @@ const Music = (() => {
   });
 
   // power-up effect state + tuning
-  const pw = { slowT: 0, phaseT: 0, x2T: 0, blastT: 0, shield: false, warpFlash: 0 };
-  const SLOW_DUR = 4, PHASE_DUR = 4, X2_DUR = 6, WARP_DIST = 120, WARP_GRACE = 0.8, WARP_POINTS = 120;
+  const pw = { slowT: 0, slowDur: 4, phaseT: 0, x2T: 0, x2Mult: 1, x2Dur: 6, blastT: 0, shields: 0, warpFlash: 0, warpInvuln: 0 };
+  const SLOW_DUR = 4, SLOW_MAX = 14, PHASE_DUR = 4, X2_DUR = 6, WARP_DIST = 120, WARP_INVULN = 2.5, WARP_POINTS = 120;
   const SLOW_FACTOR = 0.45, BLAST_DUR = 5, LASER_LEN = 110, LASER_HALF_X = 5, BLAST_AHEAD = 100;
   let nextOrbTrack = 220;
 
@@ -996,18 +1002,18 @@ const Music = (() => {
     toast(def.name, def.toast);
     if (navigator.vibrate) navigator.vibrate(30);
     switch (type) {
-      case 'slowmo': pw.slowT = SLOW_DUR; break;
+      case 'slowmo': pw.slowDur = Math.min(SLOW_MAX, SLOW_DUR + state.score / 250); pw.slowT = pw.slowDur; break;
       case 'phase':  pw.phaseT = PHASE_DUR; break;
-      case 'x2':     pw.x2T = X2_DUR; break;
-      case 'shield': pw.shield = true; break;
+      case 'x2':     pw.x2Mult = pw.x2T > 0 ? pw.x2Mult * 2 : 2; pw.x2Dur = Math.min(60, X2_DUR * (pw.x2Mult / 2)); pw.x2T = pw.x2Dur; break;
+      case 'shield': pw.shields++; break;
       case 'blast':  pw.blastT = BLAST_DUR; break;
       case 'warp':   doWarp(); break;
     }
   }
 
   function tryShield() {
-    if (!pw.shield) return false;
-    pw.shield = false;
+    if (pw.shields <= 0) return false;
+    pw.shields--;
     state.grace = Math.max(state.grace, 0.6);
     emitSparks(0, player.position.z);
     state.shake = Math.max(state.shake, 0.4);
@@ -1028,7 +1034,7 @@ const Music = (() => {
     if (cubes.instanceColor) cubes.instanceColor.needsUpdate = true;
     for (const o of orbs) { if (o.active) { o.z += WARP_DIST; if (o.z > 6) { o.active = false; o.group.visible = false; } } }
     if (hallActive) { const g = hallGeom(state.scroll); if (g) state.px = THREE.MathUtils.clamp(state.px, g.center - g.laneHalf + 4, g.center + g.laneHalf - 4); }
-    state.grace = Math.max(state.grace, WARP_GRACE);
+    pw.warpInvuln = WARP_INVULN;   // a few seconds of invincibility so you don't dash into a block and die
     pw.warpFlash = 0.35;
     state.shake = Math.max(state.shake, 0.4);
   }
@@ -1160,7 +1166,7 @@ const Music = (() => {
       if (!container) return;
       container.innerHTML = '';
       SKINS.forEach(skin => {
-        const isUnlocked = unlockedSkins.has(skin.id);
+        const isUnlocked = unlockedSkins.has(skin.id) || (skin.id === 'leader' && leaderUnlocked);
         const isActive = activeSkinId === skin.id;
         const isNew = id === 'deathSkinSelect' && newSkinsThisRun.includes(skin.id);
         const dot = document.createElement('div');
@@ -1237,6 +1243,30 @@ const Music = (() => {
       if (u.type === 'score'  && state.score  >= u.value) unlockSkin(skin.id);
       else if (u.type === 'deaths' && stats.deaths >= u.value) unlockSkin(skin.id);
       else if (u.type === 'runs'   && stats.runs   >= u.value) unlockSkin(skin.id);
+    }
+  }
+
+  // Glowing-gold Leader skin: granted while your best holds #1, auto-equipped, removed when beaten.
+  function updateLeaderSkin(scores) {
+    if (!scores || !scores.length) return;          // no live data → don't flip state (avoids offline loss)
+    const top = scores[0].score;
+    const nowLeader = state.best > 0 && state.best >= top;
+    if (nowLeader && !leaderUnlocked) {
+      leaderUnlocked = true;
+      newSkinsThisRun.push('leader');
+      preLeaderSkin = activeSkinId;
+      activeSkinId = 'leader';
+      applySkin(SKINS.find(s => s.id === 'leader'));
+      renderSkinUI();
+      toast('#1 — Leader skin!', '#ffd23f');
+    } else if (!nowLeader && leaderUnlocked) {
+      leaderUnlocked = false;
+      if (activeSkinId === 'leader') {
+        activeSkinId = (preLeaderSkin && unlockedSkins.has(preLeaderSkin)) ? preLeaderSkin : 'default';
+        applySkin(SKINS.find(s => s.id === activeSkinId));
+      }
+      renderSkinUI();
+      toast('Lost #1', '#ffd23f');
     }
   }
 
@@ -1399,7 +1429,8 @@ const Music = (() => {
     hallMesh.count = 0;
     runTouchedL = false; runTouchedR = false; streakHold = 0;
     // power-ups
-    pw.slowT = 0; pw.phaseT = 0; pw.x2T = 0; pw.blastT = 0; pw.shield = false; pw.warpFlash = 0;
+    pw.slowT = 0; pw.slowDur = SLOW_DUR; pw.phaseT = 0; pw.x2T = 0; pw.x2Mult = 1; pw.x2Dur = X2_DUR;
+    pw.blastT = 0; pw.shields = 0; pw.warpFlash = 0; pw.warpInvuln = 0;
     nextOrbTrack = 220;
     for (const o of orbs) { o.active = false; o.group.visible = false; }
     laserGroup.visible = false;
@@ -1512,6 +1543,7 @@ const Music = (() => {
     deathLb.innerHTML = '';
     document.getElementById('rankDisplay').classList.add('hidden');
     fetchScores().then(scores => {
+      updateLeaderSkin(scores);
       const threshold = scores.length < 10 ? 0 : (scores[scores.length - 1]?.score ?? 0);
       if (pendingScore > threshold && pendingScore > 0) {
         initialsWrap.classList.remove('hidden');
@@ -1594,9 +1626,10 @@ const Music = (() => {
       // power-up timers
       if (pw.slowT > 0)     pw.slowT     -= dt;
       if (pw.phaseT > 0)    pw.phaseT    -= dt;
-      if (pw.x2T > 0)       pw.x2T       -= dt;
+      if (pw.x2T > 0)       { pw.x2T -= dt; if (pw.x2T <= 0) pw.x2Mult = 1; }
       if (pw.blastT > 0)    pw.blastT    -= dt;
       if (pw.warpFlash > 0) pw.warpFlash -= dt;
+      if (pw.warpInvuln > 0) pw.warpInvuln -= dt;
       const slow = pw.slowT > 0 ? SLOW_FACTOR : 1;
 
       // difficulty ramp — slow build that takes much longer to reach top speed
@@ -1652,7 +1685,7 @@ const Music = (() => {
       // score + streak multiplier
       if (state.grace <= 0) {
         const base = state.speed * dt * slow * 0.18;
-        const x2 = pw.x2T > 0 ? 2 : 1;
+        const x2 = pw.x2T > 0 ? pw.x2Mult : 1;
         state.score += base * state.multiplier * x2;
         state.streakDist += base;
         if (state.streakDist > 150 && state.multiplier < 1.5) {
@@ -1727,9 +1760,9 @@ const Music = (() => {
           const xd = Math.abs(c.x - state.px);
           const zd = Math.abs(c.z - pz);
 
-          // collision (phase passes through; shield absorbs one hit)
+          // collision (phase / warp-invuln pass through; shield absorbs one hit)
           if (xd < half + 0.85 && zd < half + 0.85) {
-            if (pw.phaseT <= 0 && !tryShield()) die();
+            if (pw.phaseT <= 0 && pw.warpInvuln <= 0 && !tryShield()) die();
           }
 
           // near-miss: cube just cleared the player
@@ -1795,20 +1828,21 @@ const Music = (() => {
       else if (curSkin.anim === 'shimmer' && tex) tex.rotation = Math.sin(state.t * 0.8) * 0.25;
     }
 
-    // power-up: phase translucency + warp flash on the arrow
-    const phasing = pw.phaseT > 0;
-    arrowMat.transparent = phasing;
-    arrowMat.opacity = phasing ? 0.4 + 0.2 * Math.sin(state.t * 12) : 1;
+    // power-up: phase / warp-invuln translucency + warp flash on the arrow
+    const ghosting = pw.phaseT > 0 || pw.warpInvuln > 0;
+    arrowMat.transparent = ghosting;
+    arrowMat.opacity = ghosting ? 0.4 + 0.2 * Math.sin(state.t * 12) : 1;
     if (pw.warpFlash > 0) { arrowMat.emissiveIntensity = 3.5; ring.material.opacity = 0.9; }
     else if (curSkin && curSkin.anim !== 'pulse') arrowMat.emissiveIntensity = curSkin.emissiveInt;
 
     // active power-up HUD pill (show the dominant timed effect, or held shield)
     let pName = null, pRem = 0, pDur = 1, pCol = '#fff', pStatic = false;
-    if (pw.slowT  > pRem) { pName = 'SLOW-MO';  pRem = pw.slowT;  pDur = SLOW_DUR;  pCol = '#00e5ff'; }
-    if (pw.phaseT > pRem) { pName = 'PHASE';    pRem = pw.phaseT; pDur = PHASE_DUR; pCol = '#c080ff'; }
-    if (pw.x2T    > pRem) { pName = 'SCORE ×2'; pRem = pw.x2T;    pDur = X2_DUR;    pCol = '#ff5ad6'; }
-    if (pw.blastT > pRem) { pName = 'BLASTER';  pRem = pw.blastT; pDur = BLAST_DUR; pCol = '#ff7a3a'; }
-    if (!pName && pw.shield) { pName = 'SHIELD'; pStatic = true; pCol = '#ffd23f'; }
+    if (pw.slowT      > pRem) { pName = 'SLOW-MO';  pRem = pw.slowT;      pDur = pw.slowDur; pCol = '#00e5ff'; }
+    if (pw.phaseT     > pRem) { pName = 'PHASE';    pRem = pw.phaseT;     pDur = PHASE_DUR;  pCol = '#c080ff'; }
+    if (pw.x2T        > pRem) { pName = 'SCORE ×' + pw.x2Mult; pRem = pw.x2T; pDur = pw.x2Dur; pCol = '#ff5ad6'; }
+    if (pw.blastT     > pRem) { pName = 'BLASTER';  pRem = pw.blastT;     pDur = BLAST_DUR;  pCol = '#ff7a3a'; }
+    if (pw.warpInvuln > pRem) { pName = 'INVULN';   pRem = pw.warpInvuln; pDur = WARP_INVULN; pCol = '#3dff99'; }
+    if (!pName && pw.shields > 0) { pName = pw.shields > 1 ? 'SHIELD ×' + pw.shields : 'SHIELD'; pStatic = true; pCol = '#ffd23f'; }
     if (pName && state.running) {
       ui.powerPill.classList.add('on');
       ui.powerName.textContent = pName;
@@ -1963,6 +1997,8 @@ const Music = (() => {
     rankDisplay.classList.toggle('hidden', rank === 0);
     // Show leaderboard with your entry highlighted
     renderLb(document.getElementById('deathLb'), scores, pendingScore, val);
+    // Taking #1 with this submission grants the Leader skin
+    updateLeaderSkin(scores);
     // Refresh skin dots (may have unlocked something)
     renderSkinUI();
     submitBtnEl.disabled = false;
@@ -2059,7 +2095,7 @@ const Music = (() => {
   loadStats();
   loadSkins();
   checkUnlocks();
-  fetchScores().then(s => renderLb(document.getElementById('startLb'), s));
+  fetchScores().then(s => { renderLb(document.getElementById('startLb'), s); updateLeaderSkin(s); });
   frame();
 })();
 
