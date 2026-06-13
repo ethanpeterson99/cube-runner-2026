@@ -1113,7 +1113,7 @@ const Music = (() => {
     // low-pass filter the raw reading to remove jitter, then calibrate from the smoothed value
     tiltSmooth = (tiltSmooth === null) ? deg : THREE.MathUtils.lerp(tiltSmooth, deg, 0.18);
     if (tiltZero === null) tiltZero = tiltSmooth;
-    const n = THREE.MathUtils.clamp((tiltSmooth - tiltZero) / tiltDiv, -1, 1);
+    const n = THREE.MathUtils.clamp((tiltZero - tiltSmooth) / tiltDiv, -1, 1);
     // deadzone + gentle response curve: small tilts give fine, precise movement
     const mag = Math.abs(n);
     if (mag <= TILT_DEAD) { state.tilt = 0; return; }
