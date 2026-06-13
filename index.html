@@ -553,7 +553,6 @@ const Music = (() => {
     gapTimer: 2.5,
     gapSide: 0,       // -1: cubes pushed left (gap right), 1: cubes pushed right (gap left)
     level: 0,
-    entryTimer: 0,    // > 0 during guided zig-zag entry after a level change
   };
 
   // ---------- Cube field (instanced) ----------
@@ -599,7 +598,7 @@ const Music = (() => {
   let skinPanelOpen = false;
 
   const CUBE_COUNT  = 320;
-  const SPAWN_DEPTH = 280;
+  const SPAWN_DEPTH = 240;
   const FH_MAX = 95;
   const FH_MIN = 52;
 
@@ -619,7 +618,8 @@ const Music = (() => {
   const C = new Array(CUBE_COUNT).fill(0).map(() => ({ x:0, z:0, s:1, y:0, spin:0, rot:0, passed:false }));
 
   function densityForScore(s) {
-    return Math.min(0.30, 0.10 + s / 6000);
+    // denser field — cubes are less spread out and slightly harder to thread
+    return Math.min(0.42, 0.16 + s / 5000);
   }
 
   function respawnCube(i, zBase, initial) {
@@ -963,12 +963,10 @@ const Music = (() => {
     state.grace = 2.8;
     state.level = 0;
     activePalette = LEVELS[0].pal;
-    clearGate();
     state.streakDist = 0;
     state.multiplier = 1.0;
     state.gapTimer = 2.5;
     state.gapSide = 0;
-    state.entryTimer = 0;
     tiltZero = hasTilt ? lastTiltDeg : null;
 
     C.forEach(c => c.passed = false);
@@ -1033,7 +1031,6 @@ const Music = (() => {
   let pendingScore = 0;
 
   function die() {
-    clearGate();
     state.running = false;
     state.shake = 1;
     emitFrags();
@@ -1079,60 +1076,15 @@ const Music = (() => {
   }
 
 
-  // ---------- Level gate system ----------
-  // Gap positions per transition: [rowA_x, rowB_x] so player zig-zags
-  const GATE_GAP_W  = 22;
-  const GATE_CONFIGS = [
-    { a: -24, b:  24 },  // FIRE→ICE
-    { a:  24, b: -24 },  // ICE→NEON
-    { a: -24, b:  24 },  // NEON→ACID
-    { a:  24, b: -24 },  // ACID→VOID
-  ];
-  const gateGeo   = new THREE.BoxGeometry(1, 1, 1);
-  const gateGroup = new THREE.Group();
-  scene.add(gateGroup);
-  let pendingLevel = -1;
-
-  function clearGate() {
-    for (let i = gateGroup.children.length - 1; i >= 0; i--) {
-      gateGroup.children[i].material.dispose();
-      gateGroup.remove(gateGroup.children[i]);
-    }
-    pendingLevel = -1;
-  }
-
-  function spawnGate(lvlIdx) {
-    clearGate();
-    pendingLevel = lvlIdx;
-    const { a, b } = GATE_CONFIGS[lvlIdx - 1];
-    const pal = LEVELS[lvlIdx].pal;
-    const fh  = fieldHalf();
-    [[a, 0], [b, -48]].forEach(([gapX, rowZ]) => {
-      for (let x = -fh + 4; x <= fh - 4; x += 5.5) {
-        if (Math.abs(x - gapX) < GATE_GAP_W / 2) continue;
-        const s   = 2.8 + Math.random() * 1.6;
-        const mat = new THREE.MeshLambertMaterial({ color: pal[(Math.random() * pal.length) | 0] });
-        const mesh = new THREE.Mesh(gateGeo, mat);
-        mesh.scale.setScalar(s);
-        mesh.position.set(x + (Math.random() - 0.5) * 1.5, s / 2, rowZ + (Math.random() - 0.5) * 2);
-        mesh.rotation.y = Math.random() * Math.PI;
-        gateGroup.add(mesh);
-      }
-    });
-    gateGroup.position.set(-state.px, 0, player.position.z - 110);
-  }
-
+  // ---------- Level transition (color switch only — no walls) ----------
   function changeLevel(idx) {
     state.level = idx;
     activePalette = LEVELS[idx].pal;
-    // Set gapSide BEFORE respawning so initial cube x-positions are biased to one side
-    state.gapSide = -1;
-    state.entryTimer = 10.0;
-    state.gapTimer = 1.5;
-    // Redistribute all cubes across full depth with a 120-unit clear zone at the front
+    // Recolor the existing cubes in place so the palette switches smoothly —
+    // no wall, no teleporting the field around the player.
     for (let i = 0; i < CUBE_COUNT; i++) {
-      const zBase = -(120 + Math.random() * (SPAWN_DEPTH - 30));
-      respawnCube(i, zBase, false);
+      color.setHex(activePalette[(Math.random() * activePalette.length) | 0]);
+      cubes.setColorAt(i, color);
     }
     if (cubes.instanceColor) cubes.instanceColor.needsUpdate = true;
     toast(LEVELS[idx].name);
@@ -1189,9 +1141,9 @@ const Music = (() => {
         if (navigator.vibrate) navigator.vibrate(20);
       }
 
-      // level transition: spawn gate when score hits threshold
+      // level transition: just switch the color palette when score hits threshold
       const nextLvl = state.level + 1;
-      if (nextLvl < LEVELS.length && state.score >= LEVELS[nextLvl].score && pendingLevel < 0) spawnGate(nextLvl);
+      if (nextLvl < LEVELS.length && state.score >= LEVELS[nextLvl].score) changeLevel(nextLvl);
 
       // skin unlock check
       for (const skin of SKINS) {
@@ -1246,30 +1198,16 @@ const Music = (() => {
         tp.maxLife = tp.life = 0.3 + Math.random() * 0.18;
       }
 
-      // gap corridor / entry zig-zag timer
+      // gap corridor: cubes periodically bias to one side, leaving a weaving path
       if (state.score > 50) {
-        if (state.entryTimer > 0) {
-          // Guided entry: alternate corridor sides every 1.5 s for a zig-zag feel
-          state.entryTimer -= dt;
-          state.gapTimer -= dt;
-          if (state.gapTimer <= 0) {
-            state.gapSide = state.gapSide === 1 ? -1 : 1;
-            state.gapTimer = 1.5;
-          }
-          if (state.entryTimer <= 0) {
+        state.gapTimer -= dt;
+        if (state.gapTimer <= 0) {
+          if (state.gapSide !== 0) {
             state.gapSide = 0;
-            state.gapTimer = 1.0;
-          }
-        } else {
-          state.gapTimer -= dt;
-          if (state.gapTimer <= 0) {
-            if (state.gapSide !== 0) {
-              state.gapSide = 0;
-              state.gapTimer = 1.5 + Math.random() * 1.5;
-            } else {
-              state.gapSide = Math.random() < 0.5 ? -1 : 1;
-              state.gapTimer = 2.0 + Math.random() * 1.5;
-            }
+            state.gapTimer = 1.5 + Math.random() * 1.5;
+          } else {
+            state.gapSide = Math.random() < 0.5 ? -1 : 1;
+            state.gapTimer = 2.0 + Math.random() * 1.5;
           }
         }
       }
@@ -1335,26 +1273,6 @@ const Music = (() => {
         linePos[o+3] = linePos[o];             linePos[o+4] = L[i].y; linePos[o+5] = L[i].z - len;
       }
       lineGeo.attributes.position.needsUpdate = true;
-
-      // gate: move + collide + level-change on pass
-      if (pendingLevel >= 0) {
-        gateGroup.position.x = -state.px;
-        gateGroup.position.z += dz;
-        if (state.grace <= 0) {
-          const pzG = player.position.z;
-          for (let i = 0; i < gateGroup.children.length; i++) {
-            const m  = gateGroup.children[i];
-            const wz = gateGroup.position.z + m.position.z;
-            if (Math.abs(wz - pzG) > m.scale.z / 2 + 1.2) continue;
-            if (Math.abs(m.position.x - state.px) < m.scale.x / 2 + 0.85) { die(); break; }
-          }
-        }
-        // both rows fully past player → fire level change
-        if (gateGroup.position.z > player.position.z + 55) {
-          changeLevel(pendingLevel);
-          clearGate();
-        }
-      }
     }
 
     // player visuals (always animate)
