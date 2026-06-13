@@ -621,41 +621,49 @@ const Music = (() => {
   }
 
   // ---------- Hallway corridor ----------
-  // Periodically the open field closes into a solid-walled hallway with a clear
-  // angled lane you follow for a few seconds, then it opens back into dodging.
-  // Walls are built from the existing instanced cubes (no extra mesh): each frame
-  // we lay them out as a scrolling grid keyed to track distance so they look solid.
-  const HALL_FH    = 28;    // confined half-width while inside the hallway
-  const HALL_LANE  = 8;     // half-width of the clear lane between the walls
+  // Open dodging periodically gives way to a solid-walled hallway with a clear
+  // lane that sweeps side to side, then opens back into dodging. The walls live on
+  // their own instanced mesh so the corridor can fade up on the horizon and scroll
+  // in while you keep dodging the nearby field — no popping in over the blocks.
+  const HALL_FH    = 30;    // confined half-width while inside the hallway
+  const HALL_LANE  = 11;    // half-width of the clear lane between the walls
   const HALL_S     = 5;     // wall cube size (≈ spacing, so blocks touch)
   const HALL_AMP   = 14;    // how far the lane center sweeps left/right
   const HALL_K     = 0.04;  // sweep frequency (≈ 1.5 bends over the solid run)
-  const HALL_LEAD  = 130;   // funnel-in / funnel-out length (track units)
+  const HALL_LEAD  = 150;   // funnel-in / funnel-out length (track units)
   const HALL_RUN   = 240;   // length of the solid corridor (~5s at mid speed)
-  const HALL_GAP   = 360;   // open dodging distance between corridors
-  const HALL_DEPTH = 120;   // how far ahead wall rows are drawn
+  const HALL_GAP   = 760;   // open dodging distance between corridors
+  const HALL_DEPTH = 220;   // how far ahead wall rows are drawn (sets the horizon)
+  const HALL_AHEAD = 210;   // how far ahead a corridor first appears when scheduled
+  const HALL_MAX   = 520;   // wall-cube budget
 
-  let hallPhase     = 'open'; // 'open' | 'hall'
-  let nextHallTrack = 320;    // track distance at which the next corridor begins
-  let hallStartTrack = 0;     // track pos where the solid corridor begins
+  const hallMesh = new THREE.InstancedMesh(cubeGeo, new THREE.MeshLambertMaterial({}), HALL_MAX);
+  hallMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  hallMesh.count = 0;
+  scene.add(hallMesh);
+
+  let hallActive     = false; // a corridor is scheduled / visible
+  let nextHallTrack  = 360;   // track distance at which the next corridor begins
+  let funnelStartTrack = 0;   // track pos where the walls first start closing in
+  let hallStartTrack = 0;     // track pos where the lane reaches full corridor tightness
   let hallEndTrack   = 0;     // track pos where the solid corridor ends
   let openEndTrack   = 0;     // track pos where walls have fully funneled back open
-  let hallEnterPx    = 0;     // player x when the corridor started (lane entry)
-  let fhEntry        = FH_MAX; // field half-width captured at corridor start
 
   function smooth01(t) { t = THREE.MathUtils.clamp(t, 0, 1); return t * t * (3 - 2 * t); }
 
+  function inCorridorRegion(u) { return hallActive && u >= funnelStartTrack && u <= openEndTrack; }
+
   // Lane geometry at a given track position, or null if that position is open field.
   function hallGeom(u) {
+    if (!inCorridorRegion(u)) return null;
     const local = u - hallStartTrack;
-    if (local <= -HALL_LEAD || local >= HALL_RUN + HALL_LEAD) return null;
     let effFH, laneHalf, center;
     if (local < 0) {
-      // entry funnel: full width narrows down to the lane, centered on the player
+      // entry funnel: full width narrows down to the lane, gap stays centered
       const t = smooth01((local + HALL_LEAD) / HALL_LEAD);
-      effFH    = THREE.MathUtils.lerp(fhEntry, HALL_FH, t);
+      effFH    = THREE.MathUtils.lerp(fieldHalf(), HALL_FH, t);
       laneHalf = THREE.MathUtils.lerp(effFH, HALL_LANE, t);
-      center   = THREE.MathUtils.lerp(hallEnterPx, 0, t);
+      center   = HALL_AMP * Math.sin(0) * t; // 0, but keeps the seam continuous
     } else if (local <= HALL_RUN) {
       // solid corridor: tight lane sweeping side to side
       effFH = HALL_FH; laneHalf = HALL_LANE;
@@ -663,64 +671,47 @@ const Music = (() => {
     } else {
       // exit funnel: lane widens back to the full field
       const t = smooth01((local - HALL_RUN) / HALL_LEAD);
-      const fhNow = fieldHalf();
-      effFH    = THREE.MathUtils.lerp(HALL_FH, fhNow, t);
+      effFH    = THREE.MathUtils.lerp(HALL_FH, fieldHalf(), t);
       laneHalf = THREE.MathUtils.lerp(HALL_LANE, effFH, t);
       center   = HALL_AMP * Math.sin(local * HALL_K);
     }
     return { effFH, laneHalf, center };
   }
 
-  function startHall() {
-    hallPhase      = 'hall';
-    hallEnterPx    = state.px;
-    fhEntry        = fieldHalf();
-    hallStartTrack = state.scroll + HALL_LEAD; // funnel begins here, solid HALL_LEAD later
-    hallEndTrack   = hallStartTrack + HALL_RUN;
-    openEndTrack   = hallEndTrack + HALL_LEAD;
-    toast('Corridor');
-    if (navigator.vibrate) navigator.vibrate(15);
+  function scheduleHall() {
+    hallActive       = true;
+    funnelStartTrack = state.scroll + HALL_AHEAD; // appears at the horizon
+    hallStartTrack   = funnelStartTrack + HALL_LEAD;
+    hallEndTrack     = hallStartTrack + HALL_RUN;
+    openEndTrack     = hallEndTrack + HALL_LEAD;
+    toast('Corridor ahead');
   }
 
-  function endHall() {
-    hallPhase = 'open';
-    nextHallTrack = state.scroll + HALL_GAP;
-    // re-seed the field ahead so dodging resumes without popping in the player's face
-    for (let i = 0; i < CUBE_COUNT; i++) respawnCube(i, -(60 + Math.random() * (SPAWN_DEPTH - 30)), false);
-    if (cubes.instanceColor) cubes.instanceColor.needsUpdate = true;
-  }
-
-  // Lay the wall cubes out as a scrolling grid and collide against them.
+  // Lay the wall cubes out as a scrolling grid (into hallMesh) and collide against them.
   function drawHallway(pz) {
     let idx = 0;
     const trStart = state.scroll - 18;
     const trEnd   = state.scroll + HALL_DEPTH;
-    for (let tr = Math.ceil(trStart / HALL_S) * HALL_S; tr <= trEnd && idx < CUBE_COUNT; tr += HALL_S) {
+    for (let tr = Math.ceil(trStart / HALL_S) * HALL_S; tr <= trEnd && idx < HALL_MAX; tr += HALL_S) {
       const g = hallGeom(tr);
       if (!g) continue;
       const zRow = player.position.z + (state.scroll - tr);
-      for (let x = g.center - g.laneHalf - HALL_S / 2; x >= -g.effFH && idx < CUBE_COUNT; x -= HALL_S) idx = placeWall(idx, x, zRow, pz);
-      for (let x = g.center + g.laneHalf + HALL_S / 2; x <=  g.effFH && idx < CUBE_COUNT; x += HALL_S) idx = placeWall(idx, x, zRow, pz);
+      for (let x = g.center - g.laneHalf - HALL_S / 2; x >= -g.effFH && idx < HALL_MAX; x -= HALL_S) idx = placeWall(idx, x, zRow, pz);
+      for (let x = g.center + g.laneHalf + HALL_S / 2; x <=  g.effFH && idx < HALL_MAX; x += HALL_S) idx = placeWall(idx, x, zRow, pz);
     }
-    // park the unused cubes out of sight
-    for (let i = idx; i < CUBE_COUNT; i++) {
-      dummy.position.set(0, -120, 0); dummy.scale.setScalar(0.001); dummy.updateMatrix();
-      cubes.setMatrixAt(i, dummy.matrix);
-    }
-    cubes.instanceMatrix.needsUpdate = true;
-    if (cubes.instanceColor) cubes.instanceColor.needsUpdate = true;
+    hallMesh.count = idx;
+    hallMesh.instanceMatrix.needsUpdate = true;
+    if (hallMesh.instanceColor) hallMesh.instanceColor.needsUpdate = true;
   }
 
   function placeWall(i, x, zRow, pz) {
-    const c = C[i];
-    c.x = x; c.z = zRow; c.s = HALL_S; c.y = HALL_S / 2; c.passed = true;
-    dummy.position.set(x - state.px, c.y, zRow);
+    dummy.position.set(x - state.px, HALL_S / 2, zRow);
     dummy.rotation.set(0, 0, 0);
     dummy.scale.setScalar(HALL_S);
     dummy.updateMatrix();
-    cubes.setMatrixAt(i, dummy.matrix);
+    hallMesh.setMatrixAt(i, dummy.matrix);
     color.setHex(activePalette[(i * 7) % activePalette.length]);
-    cubes.setColorAt(i, color);
+    hallMesh.setColorAt(i, color);
     if (state.grace <= 0) {
       const half = HALL_S / 2;
       if (Math.abs(x - state.px) < half + 0.85 && Math.abs(zRow - pz) < half + 0.85) die();
@@ -1066,8 +1057,9 @@ const Music = (() => {
     activePalette = LEVELS[0].pal;
     state.streakDist = 0;
     state.multiplier = 1.0;
-    hallPhase = 'open';
-    nextHallTrack = 320;
+    hallActive = false;
+    nextHallTrack = 360;
+    hallMesh.count = 0;
     tiltZero = hasTilt ? lastTiltDeg : null;
 
     C.forEach(c => c.passed = false);
@@ -1133,6 +1125,8 @@ const Music = (() => {
 
   function die() {
     state.running = false;
+    hallActive = false;
+    hallMesh.count = 0;
     state.shake = 1;
     emitFrags();
     ui.flash.classList.remove('hit'); void ui.flash.offsetWidth; ui.flash.classList.add('hit');
@@ -1274,7 +1268,7 @@ const Music = (() => {
       const fh = fieldHalf();
       // confine to the hallway's narrowed width while a corridor is around the player
       let halfW = fh;
-      if (hallPhase === 'hall') { const g = hallGeom(state.scroll); if (g) halfW = g.effFH; }
+      if (hallActive) { const g = hallGeom(state.scroll); if (g) halfW = g.effFH; }
       state.px = THREE.MathUtils.clamp(state.px + state.steer * steerSpeed * dt, -halfW + 3, halfW - 3);
 
       // score + streak multiplier
@@ -1308,62 +1302,65 @@ const Music = (() => {
       groundMat.uniforms.uScroll.value = state.scroll;
       const pz = player.position.z;
 
-      // corridor scheduling: open dodging, then a solid hallway, then open again
-      if (hallPhase === 'open') {
-        if (state.score > 40 && state.scroll > nextHallTrack) startHall();
+      // corridor scheduling: schedule one ahead, retire it once fully behind us
+      if (!hallActive) {
+        if (state.score > 40 && state.scroll > nextHallTrack) scheduleHall();
       } else if (state.scroll > openEndTrack) {
-        endHall();
+        hallActive = false;
+        nextHallTrack = state.scroll + HALL_GAP;
       }
 
-      if (hallPhase === 'hall') {
-        drawHallway(pz);
-      } else {
-        // open field — random cubes to dodge
-        const density = densityForScore(state.score);
-        const activeCount = Math.floor(CUBE_COUNT * density);
-        for (let i = 0; i < CUBE_COUNT; i++) {
-          const c = C[i];
-          c.z += dz;
-          if (c.z > 6) {
-            respawnCube(i, -SPAWN_DEPTH + (c.z - 6) % 40, false);
-            if (Math.random() < 0.10 * density) c.x = THREE.MathUtils.clamp(state.px + (Math.random()*2-1)*30, -fh, fh);
-            if (cubes.instanceColor) cubes.instanceColor.needsUpdate = true;
+      // walls (own mesh) — drawn whenever a corridor is scheduled so it fades up far ahead
+      if (hallActive) drawHallway(pz);
+      else hallMesh.count = 0;
+
+      // open field — random cubes to dodge; cubes that fall inside the corridor
+      // region are hidden so the lane stays clear and they don't clutter the walls
+      const density = densityForScore(state.score);
+      const activeCount = Math.floor(CUBE_COUNT * density);
+      for (let i = 0; i < CUBE_COUNT; i++) {
+        const c = C[i];
+        c.z += dz;
+        if (c.z > 6) {
+          respawnCube(i, -SPAWN_DEPTH + (c.z - 6) % 40, false);
+          if (Math.random() < 0.10 * density) c.x = THREE.MathUtils.clamp(state.px + (Math.random()*2-1)*30, -fh, fh);
+          if (cubes.instanceColor) cubes.instanceColor.needsUpdate = true;
+        }
+        c.rot += c.spin * dt;
+
+        const trackPos = state.scroll + (pz - c.z);
+        const hidden = i >= activeCount || inCorridorRegion(trackPos);
+        dummy.position.set(c.x - state.px, hidden ? -50 : c.y, c.z);
+        dummy.rotation.set(0, c.rot, 0);
+        dummy.scale.setScalar(c.s);
+        dummy.updateMatrix();
+        cubes.setMatrixAt(i, dummy.matrix);
+
+        if (!hidden && state.grace <= 0) {
+          const half = c.s / 2;
+          const xd = Math.abs(c.x - state.px);
+          const zd = Math.abs(c.z - pz);
+
+          // collision
+          if (xd < half + 0.85 && zd < half + 0.85) {
+            die();
           }
-          c.rot += c.spin * dt;
 
-          const hidden = i >= activeCount;
-          dummy.position.set(c.x - state.px, hidden ? -50 : c.y, c.z);
-          dummy.rotation.set(0, c.rot, 0);
-          dummy.scale.setScalar(c.s);
-          dummy.updateMatrix();
-          cubes.setMatrixAt(i, dummy.matrix);
-
-          if (!hidden && state.grace <= 0) {
-            const half = c.s / 2;
-            const xd = Math.abs(c.x - state.px);
-            const zd = Math.abs(c.z - pz);
-
-            // collision
-            if (xd < half + 0.85 && zd < half + 0.85) {
-              die();
-            }
-
-            // near-miss: cube just cleared the player
-            if (!c.passed && c.z > pz + 0.8) {
-              c.passed = true;
-              if (xd >= half + 0.85 && xd < half + 3.0) {
-                emitSparks(c.x - state.px, pz);
-                state.streakDist = 0;
-                if (state.multiplier > 1) {
-                  state.multiplier = 1.0;
-                  ui.multPill.classList.remove('on');
-                }
+          // near-miss: cube just cleared the player
+          if (!c.passed && c.z > pz + 0.8) {
+            c.passed = true;
+            if (xd >= half + 0.85 && xd < half + 3.0) {
+              emitSparks(c.x - state.px, pz);
+              state.streakDist = 0;
+              if (state.multiplier > 1) {
+                state.multiplier = 1.0;
+                ui.multPill.classList.remove('on');
               }
             }
           }
         }
-        cubes.instanceMatrix.needsUpdate = true;
       }
+      cubes.instanceMatrix.needsUpdate = true;
 
       // speed lines
       lineMat.opacity = THREE.MathUtils.clamp((velMult - 1.4) * 0.25, 0, 0.5);
