@@ -882,7 +882,7 @@ const Music = (() => {
     { id: 'slowmo', name: 'Slow-Mo',  color: 0x00e5ff, toast: '#00e5ff' },
     { id: 'phase',  name: 'Phase',    color: 0xb060ff, toast: '#c080ff' },
     { id: 'blast',  name: 'Blaster',  color: 0xff5a1f, toast: '#ff7a3a' },
-    { id: 'warp',   name: 'Warp',     color: 0x2bff88, toast: '#3dff99' },
+    { id: 'warp',   name: 'Warp +120', color: 0x2bff88, toast: '#3dff99' },
     { id: 'shield', name: 'Shield',   color: 0xffcf3f, toast: '#ffd23f' },
     { id: 'x2',     name: 'Score ×2', color: 0xff36c8, toast: '#ff5ad6' },
   ];
@@ -898,10 +898,35 @@ const Music = (() => {
   });
 
   // power-up effect state + tuning
-  const pw = { slowT: 0, phaseT: 0, x2T: 0, shield: false, warpFlash: 0 };
-  const SLOW_DUR = 4, PHASE_DUR = 4, X2_DUR = 6, WARP_DIST = 120, WARP_GRACE = 0.8;
-  const SLOW_FACTOR = 0.45, BLAST_HALF_X = 14, BLAST_AHEAD = 90;
+  const pw = { slowT: 0, phaseT: 0, x2T: 0, blastT: 0, shield: false, warpFlash: 0 };
+  const SLOW_DUR = 4, PHASE_DUR = 4, X2_DUR = 6, WARP_DIST = 120, WARP_GRACE = 0.8, WARP_POINTS = 120;
+  const SLOW_FACTOR = 0.45, BLAST_DUR = 5, LASER_LEN = 110, LASER_HALF_X = 5, BLAST_AHEAD = 100;
   let nextOrbTrack = 220;
+
+  // twin laser beams fired from the arrow while the blaster is active
+  const laserMat = new THREE.MeshBasicMaterial({ color: 0xff5a1f, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
+  const laserGroup = new THREE.Group(); laserGroup.visible = false; scene.add(laserGroup);
+  [-0.55, 0.55].forEach(bx => {
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, LASER_LEN), laserMat);
+    beam.position.set(bx, 0.55, player.position.z - LASER_LEN / 2 + 1.2);
+    laserGroup.add(beam);
+  });
+
+  // destroy field cubes in the laser column ahead (called every frame while firing)
+  function fireLasers() {
+    const pz = player.position.z;
+    let hitX = null, hitZ = 0;
+    for (let i = 0; i < CUBE_COUNT; i++) {
+      const c = C[i];
+      if (c.passed || c.z > pz - 1 || c.z < pz - BLAST_AHEAD) continue;
+      if (Math.abs(c.x - state.px) > LASER_HALF_X) continue;
+      c.passed = true;
+      if (hitX === null || c.z > hitZ) { hitX = c.x; hitZ = c.z; } // nearest hit for the spark
+      respawnCube(i, c.z - SPAWN_DEPTH, false);
+    }
+    if (hitX !== null) { emitSparks(hitX - state.px, hitZ); state.shake = Math.max(state.shake, 0.25); }
+    if (cubes.instanceColor) cubes.instanceColor.needsUpdate = true;
+  }
 
   function trySpawnOrb() {
     const slot = orbs.find(o => !o.active);
@@ -926,7 +951,7 @@ const Music = (() => {
       case 'phase':  pw.phaseT = PHASE_DUR; break;
       case 'x2':     pw.x2T = X2_DUR; break;
       case 'shield': pw.shield = true; break;
-      case 'blast':  doBlast(); break;
+      case 'blast':  pw.blastT = BLAST_DUR; break;
       case 'warp':   doWarp(); break;
     }
   }
@@ -941,21 +966,9 @@ const Music = (() => {
     return true;
   }
 
-  function doBlast() {
-    const pz = player.position.z;
-    for (let i = 0; i < CUBE_COUNT; i++) {
-      const c = C[i];
-      if (c.passed || c.z > pz + 2 || c.z < pz - BLAST_AHEAD) continue;
-      if (Math.abs(c.x - state.px) > BLAST_HALF_X) continue;
-      c.passed = true;
-      respawnCube(i, c.z - SPAWN_DEPTH, false);
-    }
-    if (cubes.instanceColor) cubes.instanceColor.needsUpdate = true;
-    emitSparks(0, pz - 6);
-    state.shake = Math.max(state.shake, 0.5);
-  }
-
   function doWarp() {
+    state.score += WARP_POINTS;
+    ui.score.textContent = fmt(state.score);
     state.scroll += WARP_DIST;
     groundMat.uniforms.uScroll.value = state.scroll;
     for (let i = 0; i < CUBE_COUNT; i++) {
@@ -1337,9 +1350,10 @@ const Music = (() => {
     hallMesh.count = 0;
     runTouchedL = false; runTouchedR = false; streakHold = 0;
     // power-ups
-    pw.slowT = 0; pw.phaseT = 0; pw.x2T = 0; pw.shield = false; pw.warpFlash = 0;
+    pw.slowT = 0; pw.phaseT = 0; pw.x2T = 0; pw.blastT = 0; pw.shield = false; pw.warpFlash = 0;
     nextOrbTrack = 220;
     for (const o of orbs) { o.active = false; o.group.visible = false; }
+    laserGroup.visible = false;
     ui.powerPill.classList.remove('on');
     arrowMat.opacity = 1; arrowMat.transparent = false;
     ui.toast.style.color = ''; ui.toast.style.textShadow = '';
@@ -1411,6 +1425,7 @@ const Music = (() => {
     state.running = false;
     hallActive = false;
     hallMesh.count = 0;
+    laserGroup.visible = false;
     stats.deaths++; saveStats(); checkUnlocks();
     state.shake = 1;
     emitFrags();
@@ -1512,6 +1527,7 @@ const Music = (() => {
       if (pw.slowT > 0)     pw.slowT     -= dt;
       if (pw.phaseT > 0)    pw.phaseT    -= dt;
       if (pw.x2T > 0)       pw.x2T       -= dt;
+      if (pw.blastT > 0)    pw.blastT    -= dt;
       if (pw.warpFlash > 0) pw.warpFlash -= dt;
       const slow = pw.slowT > 0 ? SLOW_FACTOR : 1;
 
@@ -1679,6 +1695,10 @@ const Music = (() => {
         }
       }
 
+      // blaster: fire twin lasers, clearing the column ahead until it runs out
+      if (pw.blastT > 0) { fireLasers(); laserGroup.visible = true; laserMat.opacity = 0.55 + Math.random() * 0.4; }
+      else laserGroup.visible = false;
+
       // speed lines
       lineMat.opacity = THREE.MathUtils.clamp((velMult - 1.4) * 0.25, 0, 0.5);
       for (let i = 0; i < LINES; i++) {
@@ -1717,6 +1737,7 @@ const Music = (() => {
     if (pw.slowT  > pRem) { pName = 'SLOW-MO';  pRem = pw.slowT;  pDur = SLOW_DUR;  pCol = '#00e5ff'; }
     if (pw.phaseT > pRem) { pName = 'PHASE';    pRem = pw.phaseT; pDur = PHASE_DUR; pCol = '#c080ff'; }
     if (pw.x2T    > pRem) { pName = 'SCORE ×2'; pRem = pw.x2T;    pDur = X2_DUR;    pCol = '#ff5ad6'; }
+    if (pw.blastT > pRem) { pName = 'BLASTER';  pRem = pw.blastT; pDur = BLAST_DUR; pCol = '#ff7a3a'; }
     if (!pName && pw.shield) { pName = 'SHIELD'; pStatic = true; pCol = '#ffd23f'; }
     if (pName && state.running) {
       ui.powerPill.classList.add('on');
