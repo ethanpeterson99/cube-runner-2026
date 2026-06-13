@@ -1079,6 +1079,7 @@ const Music = (() => {
   let tiltSmooth = null;     // low-pass filtered raw angle (kills sensor jitter)
   let hasTilt = false;
   let tiltSource = 'none';
+  let lastGravity = null;    // latest devicemotion gravity vector (gimbal-free landscape steering)
   let tiltDiv = 37;          // degrees of tilt for full deflection (set by sensitivity slider)
   let motionEnabled = true;  // toggled off in settings to steer by touch/keys only
   const TILT_DEAD = 0.06;    // deadzone so the arrow sits still near neutral
@@ -1121,21 +1122,35 @@ const Music = (() => {
     state.tilt = Math.sign(n) * Math.pow(scaled, 1.5);
   }
 
+  // Steering tilt from the gravity vector along the screen's horizontal axis.
+  // This is singularity-free, unlike beta/gamma which gimbal-lock in landscape.
+  function gravityDeg(g) {
+    const a = ((screenAngle() % 360) + 360) % 360;
+    let lat, rest;
+    if (a === 90)       { lat = -g.y; rest = Math.hypot(g.x, g.z); }
+    else if (a === 270) { lat =  g.y; rest = Math.hypot(g.x, g.z); }
+    else if (a === 180) { lat =  g.x; rest = Math.hypot(g.y, g.z); }
+    else                { lat = -g.x; rest = Math.hypot(g.y, g.z); } // portrait
+    return Math.atan2(lat, rest || 1) * 180 / Math.PI;
+  }
+
   function handleOrientation(e) {
     if (e.gamma === null && e.beta === null) return;
     if (tiltSource === 'none') { tiltSource = 'orientation'; setTiltStatus('Tilt: active', true); }
     if (tiltSource !== 'orientation') return;
-    applyTilt(mapTiltDeg(e.beta || 0, e.gamma || 0));
+    const a = ((screenAngle() % 360) + 360) % 360;
+    // landscape: use the gravity vector (beta gimbal-locks here); portrait keeps the proven path
+    if ((a === 90 || a === 270) && lastGravity) applyTilt(gravityDeg(lastGravity));
+    else applyTilt(mapTiltDeg(e.beta || 0, e.gamma || 0));
   }
 
   function handleMotion(e) {
-    if (tiltSource === 'orientation') return;
     const g = e.accelerationIncludingGravity;
     if (!g || (g.x === null && g.y === null)) return;
+    lastGravity = g; // always cache so the orientation handler can use it in landscape
+    if (tiltSource === 'orientation') return;
     if (tiltSource === 'none') { tiltSource = 'motion'; setTiltStatus('Tilt: active (motion)', true); }
-    const beta  = Math.atan2(-g.y, -g.z) * 180 / Math.PI;
-    const gamma = Math.atan2(-g.x, Math.sqrt(g.y * g.y + g.z * g.z) || 1) * 180 / Math.PI;
-    applyTilt(mapTiltDeg(beta, gamma));
+    applyTilt(gravityDeg(g));
   }
 
   let tiltRequested = false;
