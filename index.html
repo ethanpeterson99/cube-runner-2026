@@ -538,7 +538,7 @@ const Music = (() => {
     score: 0,
     best: 0,
     speed: 0,
-    baseSpeed: 16,
+    baseSpeed: 20,
     maxSpeed: 100,
     px: 0,
     targetX: 0,
@@ -659,7 +659,7 @@ const Music = (() => {
 
   function densityForScore(s) {
     // denser field — cubes are less spread out and slightly harder to thread
-    return Math.min(0.42, 0.16 + s / 5000);
+    return Math.min(0.46, 0.24 + s / 5000);
   }
 
   // ---------- Hallway corridor ----------
