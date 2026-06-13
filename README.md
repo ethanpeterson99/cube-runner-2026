@@ -1,6 +1,6 @@
-# Cube Runner 2026
+# Cube Master
 
-A modern remake of the classic Cube Runner iPhone game. Tilt to steer, dodge the cubes, survive the speed ramp.
+A modern arcade dodging game. Tilt to steer, dodge the cubes, survive the speed ramp.
 
 Single-file Three.js arcade game — no build step, no dependencies beyond a CDN script tag.
 

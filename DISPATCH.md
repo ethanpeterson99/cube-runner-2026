@@ -1,4 +1,4 @@
-# DISPATCH: Deploy Cube Runner 2026
+# DISPATCH: Deploy Cube Master
 # Owner: Ethan Peterson
 # Goal: GitHub repo + live Vercel URL
 # Time: ~10 minutes
