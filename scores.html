@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>HIGH SCORES // CUBE RUNNER 2026</title>
+<style>
+  :root {
+    --bg: #07080d;
+    --ink: #f2f4ff;
+    --dim: rgba(242,244,255,.45);
+    --accent: #ff3d2e;
+    --accent2: #ffd23f;
+    --glow: 0 0 24px rgba(255,61,46,.35);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    min-height:100%; background:var(--bg);
+    font-family:"Azeret Mono","SF Mono",ui-monospace,monospace;
+    color:var(--ink);
+  }
+  body {
+    display:flex; flex-direction:column; align-items:center;
+    padding:calc(env(safe-area-inset-top,0px) + 48px) 24px calc(env(safe-area-inset-bottom,0px) + 48px);
+  }
+
+  .back {
+    position:fixed; top:calc(env(safe-area-inset-top,0px) + 16px); left:20px;
+    font-family:inherit; font-size:10px; letter-spacing:.3em; text-transform:uppercase;
+    color:var(--dim); background:rgba(7,8,13,.6); border:1px solid rgba(242,244,255,.15);
+    padding:8px 16px; border-radius:999px; cursor:pointer; text-decoration:none;
+    backdrop-filter:blur(8px); transition:color .15s;
+    display:flex; align-items:center; gap:8px;
+  }
+  .back:hover { color:var(--ink); }
+
+  .kicker { font-size:10px; letter-spacing:.5em; color:var(--accent2); text-transform:uppercase; margin-bottom:14px; text-align:center; }
+  h1 { font-size:clamp(36px,10vw,64px); font-weight:700; letter-spacing:-.02em; text-transform:uppercase; text-align:center; line-height:1; }
+  h1 .thin { display:block; font-weight:200; color:var(--dim); font-size:.4em; letter-spacing:.42em; margin-top:8px; }
+  .rule { width:56px; height:2px; background:var(--accent); margin:26px auto; box-shadow:var(--glow); }
+
+  .table { width:100%; max-width:420px; }
+  .row {
+    display:grid; grid-template-columns:40px 1fr auto;
+    align-items:center; padding:10px 0;
+    border-bottom:1px solid rgba(242,244,255,.07);
+    font-size:13px;
+  }
+  .row:last-child { border-bottom:none; }
+  .row.header { font-size:9px; letter-spacing:.38em; text-transform:uppercase; color:var(--dim); padding-bottom:12px; }
+  .row.top3 .score { color:var(--accent2); }
+  .row.top3 .init { color:var(--ink); }
+  .rank { font-size:10px; color:var(--dim); }
+  .row.top3 .rank { color:var(--accent2); font-weight:700; font-size:12px; }
+  .init { font-weight:700; letter-spacing:.2em; color:var(--accent2); }
+  .score { font-variant-numeric:tabular-nums; letter-spacing:.04em; text-align:right; }
+
+  .empty { color:var(--dim); font-size:11px; letter-spacing:.3em; text-transform:uppercase; text-align:center; margin-top:32px; }
+
+  #spinner {
+    color:var(--dim); font-size:10px; letter-spacing:.4em; text-transform:uppercase;
+    text-align:center; margin-top:32px;
+    animation:blink 1.4s ease infinite;
+  }
+  @keyframes blink { 50% { opacity:.2; } }
+</style>
+</head>
+<body>
+<a class="back" href="/">← Play</a>
+
+<div class="kicker">EBP // Arcade</div>
+<h1>High<br>Scores<span class="thin">all time top 100</span></h1>
+<div class="rule"></div>
+
+<div id="spinner">Loading ···</div>
+<div class="table" id="table" hidden>
+  <div class="row header">
+    <span class="rank">#</span>
+    <span class="init">Player</span>
+    <span class="score">Score</span>
+  </div>
+  <div id="rows"></div>
+</div>
+<div id="empty" class="empty" hidden>No scores yet — be the first!</div>
+
+<script>
+const fmt = n => String(Math.floor(n)).padStart(6, '0');
+
+async function load() {
+  try {
+    const res = await fetch('/api/scores?full=1');
+    const { scores } = await res.json();
+    document.getElementById('spinner').hidden = true;
+    if (!scores || !scores.length) {
+      document.getElementById('empty').hidden = false;
+      return;
+    }
+    document.getElementById('table').hidden = false;
+    document.getElementById('rows').innerHTML = scores.map((s, i) => `
+      <div class="row${i < 3 ? ' top3' : ''}">
+        <span class="rank">${i + 1}</span>
+        <span class="init">${s.initials}</span>
+        <span class="score">${fmt(s.score)}</span>
+      </div>
+    `).join('');
+  } catch {
+    document.getElementById('spinner').textContent = 'Failed to load — try refreshing.';
+  }
+}
+
+load();
+</script>
+</body>
+</html>

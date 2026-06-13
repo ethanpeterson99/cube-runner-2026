@@ -35,7 +35,8 @@
   .stat.right { text-align:right; }
   #speedo {
     position:fixed; left:0; right:0; top:calc(env(safe-area-inset-top,0px) + 8px);
-    display:flex; justify-content:center; pointer-events:none; z-index:10;
+    display:flex; flex-direction:column; align-items:center; gap:5px;
+    pointer-events:none; z-index:10;
     opacity:0; transition:opacity .5s;
   }
   #speedo.on { opacity:1; }
@@ -45,13 +46,16 @@
     backdrop-filter: blur(8px); background:rgba(7,8,13,.25);
   }
   #speedo .pill b { color:var(--accent2); font-weight:600; }
+  #multPill { opacity:0; transition:opacity .35s; }
+  #multPill.on { opacity:1; }
+  #multPill .pill { border-color:rgba(255,210,63,.35); box-shadow:0 0 14px rgba(255,210,63,.18); }
 
   /* ---------- Overlays ---------- */
   .overlay {
     position:fixed; inset:0; z-index:20;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
-    background:radial-gradient(120% 90% at 50% 0%, rgba(20,24,46,.92), rgba(7,8,13,.96));
-    backdrop-filter: blur(6px);
+    background:radial-gradient(120% 90% at 50% 0%, rgba(20,24,46,.72), rgba(7,8,13,.80));
+    backdrop-filter: blur(1px);
     text-align:center; padding:32px;
     transition:opacity .45s ease, visibility .45s;
   }
@@ -83,7 +87,6 @@
   #deathBest.newbest { color:var(--accent2); animation:pulse 1.2s infinite; }
   @keyframes pulse { 50% { opacity:.4; } }
 
-  /* tilt indicator on start screen */
   #tiltDemo { margin-top:34px; width:120px; height:6px; border-radius:3px; background:rgba(242,244,255,.12); position:relative; }
   #tiltDemo::after {
     content:""; position:absolute; top:-5px; width:16px; height:16px; border-radius:50%;
@@ -92,14 +95,12 @@
   }
   @keyframes slide { 0%,100% { left:0; } 50% { left:104px; } }
 
-  /* vignette + damage flash */
   #vignette { position:fixed; inset:0; pointer-events:none; z-index:5;
     background:radial-gradient(80% 70% at 50% 55%, transparent 55%, rgba(0,0,0,.5)); }
   #flash { position:fixed; inset:0; pointer-events:none; z-index:15; background:var(--accent); opacity:0; }
   #flash.hit { animation:flash .5s ease-out; }
   @keyframes flash { 0% { opacity:.7; } 100% { opacity:0; } }
 
-  /* milestone toast */
   #toast {
     position:fixed; left:50%; top:26%; transform:translate(-50%,-50%) scale(.9);
     z-index:12; pointer-events:none; opacity:0;
@@ -110,6 +111,94 @@
   @keyframes toast { 12% { opacity:1; transform:translate(-50%,-50%) scale(1); } 80% { opacity:1; } 100% { opacity:0; transform:translate(-50%,-58%) scale(1.02); } }
 
   .foot { position:fixed; bottom:calc(env(safe-area-inset-bottom,0px) + 16px); left:0; right:0; text-align:center; font-size:9px; letter-spacing:.3em; color:rgba(242,244,255,.25); text-transform:uppercase; pointer-events:none; }
+
+  /* ---------- Leaderboard ---------- */
+  .lb { width:100%; max-width:240px; margin:20px auto 0; }
+  .lb-title { font-size:9px; letter-spacing:.45em; text-transform:uppercase; color:var(--dim); margin-bottom:10px; text-align:center; }
+  .lb-row { display:flex; align-items:center; padding:5px 0; border-bottom:1px solid rgba(242,244,255,.07); font-size:11px; }
+  .lb-row:last-child { border-bottom:none; }
+  .lb-rank { font-size:9px; color:var(--dim); width:18px; flex-shrink:0; }
+  .lb-init { font-weight:700; letter-spacing:.16em; color:var(--accent2); flex:1; padding-left:8px; }
+  .lb-score { font-variant-numeric:tabular-nums; flex-shrink:0; }
+  .lb-row.mine .lb-init, .lb-row.mine .lb-score { color:var(--accent); }
+
+  /* ---------- Initials entry ---------- */
+  #initialsWrap { margin-top:22px; display:flex; flex-direction:column; align-items:center; gap:12px; }
+  #initialsWrap .lbl { font-size:9px; letter-spacing:.45em; text-transform:uppercase; color:var(--accent2); }
+  #initialsInput {
+    font-family:inherit; font-size:36px; font-weight:700; letter-spacing:.6em;
+    text-transform:uppercase; text-align:center;
+    background:transparent; color:var(--ink);
+    border:none; border-bottom:2px solid var(--accent); outline:none;
+    width:130px; padding:4px 0; caret-color:var(--accent);
+  }
+  .overlay { overflow-y:auto; }
+  .hidden { display:none !important; }
+
+  /* ---------- Rank display (post-submit) ---------- */
+  #rankDisplay { margin:14px 0 4px; display:flex; flex-direction:column; align-items:center; gap:4px; }
+  #rankDisplay .rank-label { font-size:9px; letter-spacing:.45em; text-transform:uppercase; color:var(--dim); }
+  #rankDisplay .rank-num { font-size:48px; font-weight:700; letter-spacing:-.02em; color:var(--accent2); line-height:1; }
+
+  /* ---------- Skin selector (start + death screens) ---------- */
+  #skinSection, #deathSkinSection { margin-top:20px; display:flex; flex-direction:column; align-items:center; gap:10px; }
+  .skin-heading { font-size:9px; letter-spacing:.45em; text-transform:uppercase; color:var(--dim); }
+  #skinSelect, #deathSkinSelect, #skinPanelDots { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; max-width:260px; }
+  .skin-dot {
+    width:34px; height:34px; border-radius:50%; cursor:pointer; position:relative;
+    border:2px solid transparent; transition:transform .15s, border-color .15s;
+    flex-shrink:0;
+  }
+  .skin-dot.active { border-color:rgba(242,244,255,.9); transform:scale(1.18); }
+  .skin-dot.locked { opacity:0.22; cursor:default; filter:grayscale(0.5); }
+  .skin-dot .skin-label {
+    position:absolute; bottom:-17px; left:50%; transform:translateX(-50%);
+    font-size:7px; letter-spacing:.1em; color:var(--dim); white-space:nowrap; pointer-events:none;
+  }
+  .skin-dot.new-skin { border-color:var(--accent2); transform:scale(1.18); animation:skin-pulse 1.2s ease infinite; }
+  @keyframes skin-pulse { 0%,100%{ box-shadow:0 0 0 2px rgba(255,210,63,.55); } 50%{ box-shadow:0 0 14px 4px rgba(255,210,63,.18); } }
+
+  /* ---------- In-game settings button + panel ---------- */
+  #settingsBtn {
+    position:fixed; bottom:calc(env(safe-area-inset-bottom,0px) + 44px); left:16px;
+    z-index:30; font-family:inherit; font-size:10px; letter-spacing:.28em; text-transform:uppercase;
+    color:var(--dim); background:rgba(7,8,13,.6); border:1px solid rgba(242,244,255,.15);
+    padding:7px 14px; border-radius:999px; cursor:pointer; backdrop-filter:blur(8px);
+    transition:color .15s; pointer-events:auto; display:none;
+  }
+  #settingsBtn:hover { color:var(--ink); }
+
+  #settingsPanel {
+    position:fixed; left:16px; bottom:calc(env(safe-area-inset-bottom,0px) + 90px);
+    z-index:31; pointer-events:none; width:252px;
+    background:rgba(7,8,13,.94); border:1px solid rgba(242,244,255,.14);
+    border-radius:18px; padding:18px 18px 20px;
+    backdrop-filter:blur(18px);
+    display:flex; flex-direction:column; gap:14px;
+    opacity:0; transform:translateY(10px); transition:opacity .18s, transform .18s;
+  }
+  #settingsPanel.open { opacity:1; transform:translateY(0); pointer-events:auto; }
+
+  .sp-section { display:flex; flex-direction:column; gap:10px; }
+  .sp-heading { font-size:8px; letter-spacing:.5em; text-transform:uppercase; color:rgba(242,244,255,.35); }
+  .sp-divider { height:1px; background:rgba(242,244,255,.07); }
+  .sp-row { display:flex; justify-content:space-between; align-items:center; }
+  .sp-label { font-size:8px; letter-spacing:.35em; text-transform:uppercase; color:var(--dim); }
+  .sp-val { font-size:10px; color:var(--ink); font-variant-numeric:tabular-nums; min-width:32px; text-align:right; }
+
+  .sp-slider {
+    -webkit-appearance:none; appearance:none;
+    width:100%; height:3px; border-radius:2px; outline:none; cursor:pointer;
+    background:rgba(242,244,255,.14);
+  }
+  .sp-slider::-webkit-slider-thumb {
+    -webkit-appearance:none; width:14px; height:14px; border-radius:50%;
+    background:var(--ink); cursor:pointer; box-shadow:0 1px 6px rgba(0,0,0,.5);
+  }
+  .sp-slider::-moz-range-thumb {
+    width:14px; height:14px; border-radius:50%; border:none;
+    background:var(--ink); cursor:pointer;
+  }
 </style>
 </head>
 <body>
@@ -121,17 +210,25 @@
   <div class="stat"><div class="label">Score</div><div class="value" id="score">000000</div></div>
   <div class="stat right"><div class="label">Best</div><div class="value" id="best">000000</div></div>
 </div>
-<div id="speedo"><div class="pill">VEL <b id="vel">1.0</b>×</div></div>
+<div id="speedo">
+  <div class="pill">VEL <b id="vel">1.0</b>×</div>
+  <div id="multPill"><div class="pill">STREAK <b>×1.5</b></div></div>
+</div>
 <div id="toast">Velocity Up</div>
 
 <!-- START -->
 <div class="overlay" id="startScreen">
-  <div class="kicker">EBP // Arcade</div>
-  <h1>Cube<br>Runner<span class="thin">twenty&nbsp;twenty&nbsp;six</span></h1>
+  <h1>Cube<br>Runner</h1>
   <div class="rule"></div>
-  <p class="copy"><b>Tilt</b> your phone to steer.<br>Dodge the field. It only gets faster.<br>On desktop, use <b>← →</b> or drag.</p>
+  <p class="copy"><b>Tilt</b> to steer, or <b>tap sides</b> to turn.<br>Dodge the field. It only gets faster.<br>On desktop, use <b>← →</b>.</p>
+  <div id="startLb" class="lb"></div>
   <div id="tiltDemo"></div>
+  <div id="skinSection">
+    <div class="skin-heading">Skins</div>
+    <div id="skinSelect"></div>
+  </div>
   <button class="btn" id="startBtn">Run</button>
+  <a class="btn ghost" href="/scores.html">High Scores</a>
   <div id="tiltStatus" style="margin-top:18px;font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--dim);">Tilt: waiting for sensor</div>
 </div>
 
@@ -141,34 +238,64 @@
   <div id="deathScore">000000</div>
   <div id="deathBest">Best 000000</div>
   <div class="rule"></div>
-  <button class="btn" id="retryBtn">Again</button>
+  <div id="initialsWrap" class="hidden">
+    <div class="lbl">You made the board</div>
+    <input id="initialsInput" maxlength="3" placeholder="AAA" autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="characters">
+    <button class="btn" id="submitBtn">Submit</button>
+  </div>
+  <div id="rankDisplay" class="hidden"></div>
+  <div id="deathLb" class="lb"></div>
+  <div id="deathSkinSection">
+    <div class="skin-heading">Skins</div>
+    <div id="deathSkinSelect"></div>
+  </div>
+  <button class="btn" id="retryBtn" style="margin-top:12px;">Again</button>
 </div>
 
 <div class="foot">Cube Runner · 2026</div>
+<button id="settingsBtn" title="Settings (S)">⚙ SETTINGS</button>
+<div id="settingsPanel">
+  <div class="sp-section">
+    <div class="sp-heading">SKINS</div>
+    <div id="skinPanelDots"></div>
+  </div>
+  <div class="sp-divider"></div>
+  <div class="sp-section">
+    <div class="sp-row">
+      <span class="sp-label">VOLUME</span>
+      <span class="sp-val" id="volVal">65%</span>
+    </div>
+    <input type="range" id="volSlider" class="sp-slider" min="0" max="100" value="65">
+  </div>
+  <div class="sp-divider"></div>
+  <div class="sp-section">
+    <div class="sp-row">
+      <span class="sp-label">TILT SENSITIVITY</span>
+      <span class="sp-val" id="sensVal">50%</span>
+    </div>
+    <input type="range" id="sensSlider" class="sp-slider" min="0" max="100" value="50">
+  </div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (() => {
-  // ============================================================
-  // CUBE RUNNER 2026 — single-file Three.js arcade dodger
-  // Tilt (DeviceOrientation) + keyboard + touch-drag steering
-  // ============================================================
-
   const stage = document.getElementById('stage');
   const ui = {
-    score: document.getElementById('score'),
-    best: document.getElementById('best'),
-    vel: document.getElementById('vel'),
-    hud: document.getElementById('hud'),
-    speedo: document.getElementById('speedo'),
-    start: document.getElementById('startScreen'),
-    death: document.getElementById('deathScreen'),
+    score:      document.getElementById('score'),
+    best:       document.getElementById('best'),
+    vel:        document.getElementById('vel'),
+    hud:        document.getElementById('hud'),
+    speedo:     document.getElementById('speedo'),
+    start:      document.getElementById('startScreen'),
+    death:      document.getElementById('deathScreen'),
     deathScore: document.getElementById('deathScore'),
-    deathBest: document.getElementById('deathBest'),
-    startBtn: document.getElementById('startBtn'),
-    retryBtn: document.getElementById('retryBtn'),
-    flash: document.getElementById('flash'),
-    toast: document.getElementById('toast'),
+    deathBest:  document.getElementById('deathBest'),
+    startBtn:   document.getElementById('startBtn'),
+    retryBtn:   document.getElementById('retryBtn'),
+    flash:      document.getElementById('flash'),
+    toast:      document.getElementById('toast'),
+    multPill:   document.getElementById('multPill'),
   };
 
   // ---------- Renderer / Scene ----------
@@ -178,8 +305,15 @@
   stage.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  const SKY_TOP = new THREE.Color('#1b2a6b');
-  const SKY_BOT = new THREE.Color('#0a0d1f');
+  const SKY_TOP     = new THREE.Color('#1b2a6b');
+  const SKY_BOT     = new THREE.Color('#0a0d1f');
+  const SKY_TOP_HOT = new THREE.Color('#3a0808');
+  const SKY_BOT_HOT = new THREE.Color('#190303');
+  const FOG_BASE    = new THREE.Color(0x0a0d1f);
+  const FOG_HOT     = new THREE.Color(0x180202);
+  const tgtSkyTop   = new THREE.Color().copy(SKY_TOP);
+  const tgtSkyBot   = new THREE.Color().copy(SKY_BOT);
+  const tgtFog      = new THREE.Color().copy(FOG_BASE);
   scene.fog = new THREE.Fog(0x0a0d1f, 60, 240);
 
   const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 600);
@@ -189,14 +323,14 @@
   const skyGeo = new THREE.SphereGeometry(420, 16, 12);
   const skyMat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false,
-    uniforms: { top: { value: SKY_TOP }, bot: { value: SKY_BOT } },
+    uniforms: { top: { value: SKY_TOP.clone() }, bot: { value: SKY_BOT.clone() } },
     vertexShader: `varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
     fragmentShader: `varying vec3 vP; uniform vec3 top; uniform vec3 bot;
       void main(){ float h = normalize(vP).y * .5 + .5; gl_FragColor = vec4(mix(bot, top, smoothstep(.05,.75,h)), 1.0); }`
   });
   scene.add(new THREE.Mesh(skyGeo, skyMat));
 
-  // ground — huge plane with subtle grid shader
+  // ground
   const groundMat = new THREE.ShaderMaterial({
     uniforms: { uScroll: { value: 0 }, fogColor: { value: new THREE.Color(0x0a0d1f) }, fogNear: { value: 60 }, fogFar: { value: 240 } },
     vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }`,
@@ -208,7 +342,6 @@
         vec2 g = abs(fract(vec2(vW.x, vW.z + uScroll) / 8.0) - .5);
         float line = smoothstep(.48,.5,max(g.x,g.y));
         vec3 col = mix(base, vec3(.16,.19,.34), line*.7);
-        float d = length(vW.xz - vec2(0.,0.));
         float f = smoothstep(fogNear, fogFar, length(vW - cameraPosition));
         gl_FragColor = vec4(mix(col, fogColor, f), 1.0);
       }`
@@ -223,11 +356,82 @@
   sun.position.set(-30, 60, -40);
   scene.add(sun);
 
+  // ---------- Game state (early so respawnCube can read it) ----------
+  const state = {
+    running: false,
+    score: 0,
+    best: 0,
+    speed: 0,
+    baseSpeed: 16,
+    maxSpeed: 100,
+    px: 0,
+    targetX: 0,
+    tilt: 0,
+    steer: 0,
+    scroll: 0,
+    lastMilestone: 0,
+    shake: 0,
+    t: 0,
+    grace: 0,
+    streakDist: 0,
+    multiplier: 1.0,
+    gapTimer: 2.5,
+    gapSide: 0,       // -1: cubes pushed left (gap right), 1: cubes pushed right (gap left)
+    level: 0,
+    entryTimer: 0,    // > 0 during guided zig-zag entry after a level change
+  };
+
   // ---------- Cube field (instanced) ----------
-  const PALETTE = [0xff3d2e, 0xff3d2e, 0xffd23f, 0xff7a1a, 0xe8e9f0]; // red-heavy, classic
-  const CUBE_COUNT = 320;
-  const SPAWN_DEPTH = 280;     // how far ahead cubes live
-  const FIELD_HALF = 95;       // lateral half-width of the field
+  const LEVELS = [
+    { score: 0,   name: 'FIRE',  pal: [0xff3d2e, 0xff3d2e, 0xffd23f, 0xff7a1a, 0xe8e9f0] },
+    { score: 60,  name: 'ICE',   pal: [0x00d4ff, 0x00aaff, 0x66ddff, 0x0099cc, 0xddf4ff] },
+    { score: 160, name: 'NEON',  pal: [0xff00cc, 0xcc00ff, 0xff44dd, 0x9900ff, 0xffccff] },
+    { score: 320, name: 'ACID',  pal: [0x00ff66, 0xaaff00, 0x44ff88, 0xccff00, 0xeeffee] },
+    { score: 600, name: 'VOID',  pal: [0x8800ff, 0x0022ff, 0xff0055, 0x00ffff, 0xffffff] },
+  ];
+  let activePalette = LEVELS[0].pal;
+
+  // ---------- Skin definitions ----------
+  const SKINS = [
+    { id: 'default', name: 'Default', unlock: 0,
+      color: 0xf2f4ff, emissive: 0x232838, emissiveInt: 0.6, metalness: 0.65, roughness: 0.25,
+      ringColor: 0xff3d2e, trailColor: 0x8899ff, trailOpacity: 0.18,
+      swatchBg: '#f2f4ff' },
+    { id: 'ember', name: 'Ember', unlock: 100,
+      color: 0xff6622, emissive: 0xff2200, emissiveInt: 1.4, metalness: 0.4, roughness: 0.4,
+      ringColor: 0xff5500, trailColor: 0xff4400, trailOpacity: 0.7,
+      swatchBg: 'radial-gradient(circle, #ff8833, #ff3300)' },
+    { id: 'frost', name: 'Frost', unlock: 300,
+      color: 0x88ddff, emissive: 0x0055ff, emissiveInt: 0.9, metalness: 0.85, roughness: 0.1,
+      ringColor: 0x44aaff, trailColor: 0x88ddff, trailOpacity: 0.7,
+      swatchBg: 'radial-gradient(circle, #ccf0ff, #0066ff)' },
+    { id: 'gold', name: 'Gold', unlock: 600,
+      color: 0xffd23f, emissive: 0xff9900, emissiveInt: 1.1, metalness: 0.95, roughness: 0.08,
+      ringColor: 0xffd23f, trailColor: 0xffaa00, trailOpacity: 0.7,
+      swatchBg: 'radial-gradient(circle, #ffe87a, #cc7700)' },
+    { id: 'plasma', name: 'Plasma', unlock: 1000,
+      color: 0xdd44ff, emissive: 0x8800ff, emissiveInt: 1.8, metalness: 0.3, roughness: 0.3,
+      ringColor: 0x00ffcc, trailColor: 0xcc00ff, trailOpacity: 0.75,
+      swatchBg: 'radial-gradient(circle, #ee66ff, #6600cc)' },
+    { id: 'void', name: 'Void', unlock: 2000,
+      color: 0x2a0044, emissive: 0x6600ff, emissiveInt: 3.0, metalness: 1.0, roughness: 0.0,
+      ringColor: 0x8800ff, trailColor: 0x4400cc, trailOpacity: 0.8,
+      swatchBg: 'radial-gradient(circle, #440088, #0a0014)' },
+  ];
+  let activeSkinId = 'default';
+  let unlockedSkins = new Set(['default']);
+  let newSkinsThisRun = [];
+  let skinPanelOpen = false;
+
+  const CUBE_COUNT  = 320;
+  const SPAWN_DEPTH = 280;
+  const FH_MAX = 95;
+  const FH_MIN = 52;
+
+  function fieldHalf() {
+    if (!state.running) return FH_MAX;
+    return THREE.MathUtils.lerp(FH_MAX, FH_MIN, Math.min(1, state.score / 2000));
+  }
 
   const cubeGeo = new THREE.BoxGeometry(1, 1, 1);
   const cubeMat = new THREE.MeshLambertMaterial({});
@@ -237,28 +441,36 @@
 
   const dummy = new THREE.Object3D();
   const color = new THREE.Color();
-  // per-cube state
-  const C = new Array(CUBE_COUNT).fill(0).map(() => ({ x:0, z:0, s:1, y:0, spin:0, rot:0 }));
+  const C = new Array(CUBE_COUNT).fill(0).map(() => ({ x:0, z:0, s:1, y:0, spin:0, rot:0, passed:false }));
 
   function densityForScore(s) {
-    // fraction of pool active: ramps from 35% → 100%
-    return Math.min(1, 0.35 + s / 900);
+    return Math.min(0.30, 0.10 + s / 6000);
   }
 
   function respawnCube(i, zBase, initial) {
     const c = C[i];
-    c.s = 2.2 + Math.random() * 4.2;                       // size
-    c.x = (Math.random() * 2 - 1) * FIELD_HALF;
-    c.z = zBase - Math.random() * SPAWN_DEPTH;
+    const vh = Math.max(1, state.speed / state.baseSpeed);
+    // Skew cubes smaller at high speed: harder to read, but gaps stay threadable
+    const t = Math.min(1, (vh - 1) / 2.5);
+    c.s = THREE.MathUtils.lerp(1.4, 0.65, t) + Math.random() * THREE.MathUtils.lerp(2.6, 1.3, t);
+    const fh = initial ? FH_MAX : fieldHalf();
+    // Gap corridor: push ~95% of cubes to one side, leaving the other open
+    if (!initial && state.gapSide !== 0 && state.score > 120 && Math.random() < 0.95) {
+      c.x = state.gapSide * (12 + Math.random() * (fh - 12));
+    } else {
+      c.x = (Math.random() * 2 - 1) * fh;
+    }
+    c.z = Math.min(zBase - Math.random() * SPAWN_DEPTH, -70);
     c.y = c.s / 2;
     c.rot = Math.random() * Math.PI;
-    c.spin = (Math.random() - .5) * (Math.random() < .15 ? 1.5 : 0); // some cubes slowly spin
-    if (initial && Math.abs(c.x) < 6 && c.z > -40) c.x += 18 * Math.sign(c.x || 1); // clear launch corridor
-    color.setHex(PALETTE[(Math.random() * PALETTE.length) | 0]);
+    c.spin = (Math.random() - .5) * (Math.random() < .15 ? 1.5 : 0);
+    c.passed = false;
+    if (initial && Math.abs(c.x) < 14 && c.z > -70) c.x += 26 * Math.sign(c.x || 1);
+    color.setHex(activePalette[(Math.random() * activePalette.length) | 0]);
     cubes.setColorAt(i, color);
   }
 
-  // ---------- Player arrow (chevron) ----------
+  // ---------- Player arrow ----------
   const player = new THREE.Group();
   const arrowShape = new THREE.Shape();
   arrowShape.moveTo(0, 1.4); arrowShape.lineTo(1.0, -0.9); arrowShape.lineTo(0, -0.25);
@@ -268,7 +480,6 @@
   const arrow = new THREE.Mesh(arrowGeo, arrowMat);
   arrow.rotation.x = -Math.PI / 2;
   player.add(arrow);
-  // glow ring under arrow
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(1.15, 1.5, 40),
     new THREE.MeshBasicMaterial({ color: 0xff3d2e, transparent: true, opacity: .35, side: THREE.DoubleSide })
@@ -278,7 +489,7 @@
   player.position.set(0, 0.5, -7.5);
   scene.add(player);
 
-  // speed-line particles for velocity feel
+  // speed lines
   const LINES = 90;
   const lineGeo = new THREE.BufferGeometry();
   const linePos = new Float32Array(LINES * 6);
@@ -294,42 +505,158 @@
   }
   L.forEach((_, i) => resetLine(i, true));
 
-  // ---------- Game state ----------
-  const state = {
-    running: false,
-    score: 0,
-    best: 0,
-    speed: 0,         // world units / sec
-    baseSpeed: 38,
-    maxSpeed: 150,
-    px: 0,            // player x
-    targetX: 0,
-    tilt: 0,          // -1..1 steering input
-    scroll: 0,
-    lastMilestone: 0,
-    shake: 0,
-    t: 0,
-  };
+  // ---------- Trail particles ----------
+  const TRAIL_COUNT = 55;
+  const trailBuf = new Float32Array(TRAIL_COUNT * 3);
+  const trailGeo = new THREE.BufferGeometry();
+  trailGeo.setAttribute('position', new THREE.BufferAttribute(trailBuf, 3));
+  const trailMat = new THREE.PointsMaterial({ color: 0x8899ff, size: 0.28, transparent: true, opacity: 0, depthWrite: false });
+  scene.add(new THREE.Points(trailGeo, trailMat));
+  const TP = Array.from({length: TRAIL_COUNT}, (_, i) => {
+    trailBuf[i*3+1] = -100;
+    return { x:0, y:-100, z:0, life:0, maxLife:0 };
+  });
+  let trailHead = 0;
+  let trailTimer = 0;
 
-  // best score persistence (artifact storage w/ in-memory fallback)
-  async function loadBest() {
-    try {
-      const r = await window.storage.get('cube-runner-best');
-      if (r && r.value) state.best = parseInt(r.value, 10) || 0;
-    } catch (e) { /* first run / unavailable */ }
-    ui.best.textContent = fmt(state.best);
-  }
-  async function saveBest() {
-    try { await window.storage.set('cube-runner-best', String(state.best)); } catch (e) {}
+  // ---------- Near-miss sparks ----------
+  const SPARK_COUNT = 24;
+  const sparkBuf = new Float32Array(SPARK_COUNT * 3);
+  const sparkGeo = new THREE.BufferGeometry();
+  sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkBuf, 3));
+  const sparkMat = new THREE.PointsMaterial({ color: 0xff9030, size: 0.4, transparent: true, opacity: 0, depthWrite: false });
+  scene.add(new THREE.Points(sparkGeo, sparkMat));
+  const SP = Array.from({length: SPARK_COUNT}, () => ({ vx:0, vy:0, vz:0, life:0 }));
+  let sparkAlive = false;
+
+  function emitSparks(wx, wz) {
+    for (let i = 0; i < SPARK_COUNT; i++) {
+      sparkBuf[i*3] = wx; sparkBuf[i*3+1] = 0.6; sparkBuf[i*3+2] = wz;
+      const angle = Math.random() * Math.PI * 2;
+      const spd = 2 + Math.random() * 9;
+      SP[i].vx = Math.cos(angle) * spd;
+      SP[i].vy = 0.5 + Math.random() * 4;
+      SP[i].vz = Math.sin(angle) * spd * 0.5;
+      SP[i].life = 0.35 + Math.random() * 0.2;
+    }
+    sparkMat.opacity = 0.9;
+    sparkAlive = true;
+    sparkGeo.attributes.position.needsUpdate = true;
   }
 
+  // ---------- Death explosion fragments ----------
+  const FRAG_COUNT = 8;
+  const fragData = Array.from({length: FRAG_COUNT}, (_, i) => {
+    const sz = 0.2 + Math.random() * 0.28;
+    const mat = new THREE.MeshLambertMaterial({ color: i % 2 === 0 ? 0xf2f4ff : 0xff3d2e, transparent: true });
+    const m = new THREE.Mesh(new THREE.BoxGeometry(sz, sz, sz), mat);
+    m.visible = false;
+    scene.add(m);
+    return { mesh: m, vx:0, vy:0, vz:0, rx:0, ry:0, rz:0, life:0, maxLife:0.7 };
+  });
+
+  function emitFrags() {
+    player.visible = false;
+    fragData.forEach((f, i) => {
+      f.mesh.position.set(0, player.position.y, player.position.z);
+      const angle = (i / FRAG_COUNT) * Math.PI * 2 + Math.random() * 0.5;
+      const spd = 3 + Math.random() * 7;
+      f.vx = Math.cos(angle) * spd;
+      f.vy = 1.5 + Math.random() * 5;
+      f.vz = Math.sin(angle) * spd * 0.4 - 1.5;
+      f.rx = (Math.random() - 0.5) * 14;
+      f.ry = (Math.random() - 0.5) * 14;
+      f.rz = (Math.random() - 0.5) * 14;
+      f.maxLife = f.life = 0.6 + Math.random() * 0.2;
+      f.mesh.material.opacity = 1;
+      f.mesh.visible = true;
+    });
+  }
+
+  // ---------- Persistence ----------
   const fmt = n => String(Math.floor(n)).padStart(6, '0');
 
+  function loadBest() {
+    try { state.best = parseInt(localStorage.getItem('cube-runner-best'), 10) || 0; } catch {}
+    ui.best.textContent = fmt(state.best);
+  }
+  function saveBest() {
+    try { localStorage.setItem('cube-runner-best', String(state.best)); } catch {}
+  }
+
+  function applySkin(skin) {
+    if (!skin) return;
+    arrowMat.color.setHex(skin.color);
+    arrowMat.emissive.setHex(skin.emissive);
+    arrowMat.emissiveIntensity = skin.emissiveInt;
+    arrowMat.metalness = skin.metalness;
+    arrowMat.roughness = skin.roughness;
+    ring.material.color.setHex(skin.ringColor);
+    trailMat.color.setHex(skin.trailColor);
+  }
+
+  function closeSettingsPanel() {
+    skinPanelOpen = false;
+    document.getElementById('settingsPanel').classList.remove('open');
+  }
+
+  function renderSkinUI() {
+    ['skinSelect', 'skinPanelDots', 'deathSkinSelect'].forEach(id => {
+      const container = document.getElementById(id);
+      if (!container) return;
+      container.innerHTML = '';
+      SKINS.forEach(skin => {
+        const isUnlocked = unlockedSkins.has(skin.id);
+        const isActive = activeSkinId === skin.id;
+        const isNew = id === 'deathSkinSelect' && newSkinsThisRun.includes(skin.id);
+        const dot = document.createElement('div');
+        dot.className = 'skin-dot' +
+          (isActive ? ' active' : '') +
+          (isUnlocked ? '' : ' locked') +
+          (isNew ? ' new-skin' : '');
+        dot.style.background = skin.swatchBg;
+        const label = document.createElement('div');
+        label.className = 'skin-label';
+        label.textContent = isUnlocked ? skin.name : skin.unlock.toString();
+        dot.appendChild(label);
+        if (isUnlocked) {
+          dot.addEventListener('click', () => {
+            activeSkinId = skin.id;
+            applySkin(skin);
+            saveSkins();
+            renderSkinUI();
+            closeSettingsPanel();
+          });
+        }
+        container.appendChild(dot);
+      });
+    });
+  }
+
+  function loadSkins() {
+    try {
+      const raw = localStorage.getItem('cube-runner-skins');
+      if (raw) raw.split(',').forEach(id => { if (SKINS.find(s => s.id === id)) unlockedSkins.add(id); });
+      const act = localStorage.getItem('cube-runner-active-skin');
+      if (act && unlockedSkins.has(act)) activeSkinId = act;
+    } catch {}
+    applySkin(SKINS.find(s => s.id === activeSkinId));
+    renderSkinUI();
+  }
+
+  function saveSkins() {
+    try {
+      localStorage.setItem('cube-runner-skins', [...unlockedSkins].join(','));
+      localStorage.setItem('cube-runner-active-skin', activeSkinId);
+    } catch {}
+  }
+
   // ---------- Input: tilt ----------
-  let tiltZero = null;            // calibration offset (degrees)
-  let lastTiltDeg = 0;            // most recent raw tilt reading
-  let hasTilt = false;            // any sensor data received?
-  let tiltSource = 'none';        // 'orientation' | 'motion' | 'none'
+  let tiltZero = null;
+  let lastTiltDeg = 0;
+  let hasTilt = false;
+  let tiltSource = 'none';
+  let tiltDiv = 26;
   const tiltStatusEl = document.getElementById('tiltStatus');
 
   function setTiltStatus(msg, ok) {
@@ -338,45 +665,41 @@
     tiltStatusEl.style.color = ok ? 'var(--accent2)' : 'var(--dim)';
   }
 
-  // current screen rotation in degrees: 0, 90, 180, -90/270
   function screenAngle() {
     if (screen.orientation && typeof screen.orientation.angle === 'number') return screen.orientation.angle;
     if (typeof window.orientation === 'number') return window.orientation;
     return 0;
   }
 
-  // map raw device angles to "lean left/right relative to current screen orientation"
   function mapTiltDeg(beta, gamma) {
     const a = ((screenAngle() % 360) + 360) % 360;
     switch (a) {
-      case 90:  return beta;     // landscape, home button right
-      case 180: return -gamma;   // upside-down portrait
-      case 270: return -beta;    // landscape, home button left
-      default:  return gamma;    // portrait
+      case 90:  return beta;
+      case 180: return -gamma;
+      case 270: return -beta;
+      default:  return gamma;
     }
   }
 
   function applyTilt(deg) {
     hasTilt = true;
     lastTiltDeg = deg;
-    if (tiltZero === null) tiltZero = deg;            // auto-calibrate on first reading
-    state.tilt = THREE.MathUtils.clamp((deg - tiltZero) / 26, -1, 1); // ±26° = full lock
+    if (tiltZero === null) tiltZero = deg;
+    state.tilt = THREE.MathUtils.clamp((deg - tiltZero) / tiltDiv, -1, 1);
   }
 
   function handleOrientation(e) {
-    if (e.gamma === null && e.beta === null) return;  // some browsers fire empty events
+    if (e.gamma === null && e.beta === null) return;
     if (tiltSource === 'none') { tiltSource = 'orientation'; setTiltStatus('Tilt: active', true); }
-    if (tiltSource !== 'orientation') return;          // orientation wins over motion
+    if (tiltSource !== 'orientation') return;
     applyTilt(mapTiltDeg(e.beta || 0, e.gamma || 0));
   }
 
-  // fallback: derive lean angle from gravity vector (devicemotion)
   function handleMotion(e) {
     if (tiltSource === 'orientation') return;
     const g = e.accelerationIncludingGravity;
     if (!g || (g.x === null && g.y === null)) return;
     if (tiltSource === 'none') { tiltSource = 'motion'; setTiltStatus('Tilt: active (motion)', true); }
-    // angle of gravity in the screen plane → degrees of lean
     const beta  = Math.atan2(-g.y, -g.z) * 180 / Math.PI;
     const gamma = Math.atan2(-g.x, Math.sqrt(g.y * g.y + g.z * g.z) || 1) * 180 / Math.PI;
     applyTilt(mapTiltDeg(beta, gamma));
@@ -387,7 +710,6 @@
     if (tiltRequested) return;
     tiltRequested = true;
     try {
-      // iOS 13+: must be called directly from a user gesture, separately for each API
       if (typeof DeviceOrientationEvent !== 'undefined' &&
           typeof DeviceOrientationEvent.requestPermission === 'function') {
         const res = await DeviceOrientationEvent.requestPermission();
@@ -402,17 +724,12 @@
     }
     window.addEventListener('deviceorientation', handleOrientation, true);
     window.addEventListener('devicemotion', handleMotion, true);
-    // if nothing arrives in 1.5s, sensors are unavailable (e.g. sandboxed iframe, desktop)
     setTimeout(() => {
       if (!hasTilt) setTiltStatus('Tilt: unavailable — drag or use arrows', false);
     }, 1500);
   }
 
-  // recalibrate neutral grip whenever the phone is rotated portrait ⇄ landscape
-  function onRotate() {
-    tiltZero = null;            // next reading becomes the new neutral
-    state.tilt = 0;
-  }
+  function onRotate() { tiltZero = null; state.tilt = 0; }
   if (screen.orientation && screen.orientation.addEventListener) {
     screen.orientation.addEventListener('change', onRotate);
   } else {
@@ -421,30 +738,90 @@
 
   // ---------- Input: keys ----------
   const keys = {};
-  addEventListener('keydown', e => { keys[e.key] = true; if (e.key === ' ' && !state.running && ui.start.classList.contains('hidden')) restart(); });
+  addEventListener('keydown', e => {
+    keys[e.key] = true;
+    if (e.key === ' ' && !state.running && ui.start.classList.contains('hidden')) restart();
+    if ((e.key === 's' || e.key === 'S') && state.running) settingsBtn.click();
+  });
   addEventListener('keyup', e => keys[e.key] = false);
 
-  // ---------- Input: touch drag (fallback steering) ----------
-  let dragX = null;
-  addEventListener('touchstart', e => { if (state.running) dragX = e.touches[0].clientX; }, { passive: true });
-  addEventListener('touchmove', e => {
-    if (!state.running || dragX === null) return;
-    const dx = e.touches[0].clientX - dragX;
-    state.tilt = THREE.MathUtils.clamp(dx / (innerWidth * .28), -1, 1);
-  }, { passive: true });
-  addEventListener('touchend', () => { dragX = null; if (!hasTilt) state.tilt = 0; });
+  // ---------- Input: touch ----------
+  let touchSteer = 0;
+  function readTouchSteer(touches) {
+    if (skinPanelOpen) return;
+    let left = false, right = false;
+    for (let i = 0; i < touches.length; i++) {
+      if (touches[i].clientX < innerWidth / 2) left = true; else right = true;
+    }
+    touchSteer = (right && !left) ? 1 : (left && !right) ? -1 : 0;
+  }
+  addEventListener('touchstart',  e => { if (state.running) readTouchSteer(e.touches); }, { passive: true });
+  addEventListener('touchmove',   e => { if (state.running) readTouchSteer(e.touches); }, { passive: true });
+  addEventListener('touchend',    e => { readTouchSteer(e.touches); });
+  addEventListener('touchcancel', () => { touchSteer = 0; });
 
   // ---------- Lifecycle ----------
   function resetWorld() {
     state.score = 0;
     state.speed = state.baseSpeed;
-    state.px = 0; state.targetX = 0;
+    state.px = 0; state.targetX = 0; state.steer = 0;
     state.scroll = 0; state.lastMilestone = 0; state.shake = 0;
-    tiltZero = hasTilt ? lastTiltDeg : null;   // recalibrate to current grip
+    state.grace = 2.8;
+    state.level = 0;
+    activePalette = LEVELS[0].pal;
+    clearGate();
+    state.streakDist = 0;
+    state.multiplier = 1.0;
+    state.gapTimer = 2.5;
+    state.gapSide = 0;
+    state.entryTimer = 0;
+    tiltZero = hasTilt ? lastTiltDeg : null;
+
+    C.forEach(c => c.passed = false);
+    player.visible = true;
+    fragData.forEach(f => { f.mesh.visible = false; f.life = 0; });
+    sparkAlive = false; sparkMat.opacity = 0;
+
+    newSkinsThisRun = [];
+    closeSettingsPanel();
+
+    // clear trail
+    TP.forEach((t, i) => { t.life = 0; trailBuf[i*3+1] = -100; });
+    trailGeo.attributes.position.needsUpdate = true;
+    trailMat.opacity = 0;
+    trailHead = 0; trailTimer = 0;
+
+    // reset sky/fog
+    skyMat.uniforms.top.value.copy(SKY_TOP);
+    skyMat.uniforms.bot.value.copy(SKY_BOT);
+    scene.fog.color.copy(FOG_BASE);
+    groundMat.uniforms.fogColor.value.copy(FOG_BASE);
+
     for (let i = 0; i < CUBE_COUNT; i++) respawnCube(i, -20, true);
+
+    // Opening corridor: 30 cubes per side
+    const SIDE = 30;
+    for (let i = 0; i < SIDE; i++) {
+      const zOff = -8 - i * 8;
+      const cL = C[i];
+      cL.s = 1.8 + Math.random() * 2.0;
+      cL.x = -(22 + Math.random() * 35);
+      cL.z = zOff; cL.y = cL.s / 2;
+      color.setHex(activePalette[(Math.random() * activePalette.length) | 0]);
+      cubes.setColorAt(i, color);
+      const cR = C[SIDE + i];
+      cR.s = 1.8 + Math.random() * 2.0;
+      cR.x = 22 + Math.random() * 35;
+      cR.z = zOff; cR.y = cR.s / 2;
+      color.setHex(activePalette[(Math.random() * activePalette.length) | 0]);
+      cubes.setColorAt(SIDE + i, color);
+    }
     if (cubes.instanceColor) cubes.instanceColor.needsUpdate = true;
+
     ui.score.textContent = fmt(0);
     ui.vel.textContent = '1.0';
+    ui.multPill.classList.remove('on');
+    applySkin(SKINS.find(s => s.id === activeSkinId));
   }
 
   function start() {
@@ -454,32 +831,118 @@
     ui.death.classList.add('hidden');
     ui.hud.classList.add('on');
     ui.speedo.classList.add('on');
+    document.getElementById('settingsBtn').style.display = 'block';
     state.running = true;
   }
   const restart = start;
 
+  let pendingScore = 0;
+
   function die() {
+    clearGate();
     state.running = false;
     state.shake = 1;
+    emitFrags();
     ui.flash.classList.remove('hit'); void ui.flash.offsetWidth; ui.flash.classList.add('hit');
     if (navigator.vibrate) navigator.vibrate([60, 40, 120]);
-    const isBest = state.score > state.best;
-    if (isBest) { state.best = Math.floor(state.score); saveBest(); }
+    pendingScore = Math.floor(state.score);
+    const isBest = pendingScore > state.best;
+    if (isBest) { state.best = pendingScore; saveBest(); }
     ui.best.textContent = fmt(state.best);
-    ui.deathScore.textContent = fmt(state.score);
+    ui.deathScore.textContent = fmt(pendingScore);
     ui.deathBest.textContent = (isBest ? '★ New Best ' : 'Best ') + fmt(state.best);
     ui.deathBest.classList.toggle('newbest', isBest);
-    setTimeout(() => ui.death.classList.remove('hidden'), 420);
+    const initialsWrap = document.getElementById('initialsWrap');
+    const deathLb = document.getElementById('deathLb');
+    initialsWrap.classList.add('hidden');
+    deathLb.innerHTML = '';
+    document.getElementById('rankDisplay').classList.add('hidden');
+    fetchScores().then(scores => {
+      const threshold = scores.length < 10 ? 0 : (scores[scores.length - 1]?.score ?? 0);
+      if (pendingScore > threshold && pendingScore > 0) {
+        initialsWrap.classList.remove('hidden');
+        document.getElementById('initialsInput').value = '';
+        setTimeout(() => document.getElementById('initialsInput').focus(), 700);
+      } else {
+        renderLb(deathLb, scores);
+      }
+    });
+    setTimeout(() => {
+      document.getElementById('settingsBtn').style.display = 'none';
+      closeSettingsPanel();
+      renderSkinUI();
+      ui.death.classList.remove('hidden');
+    }, 660);
   }
 
   ui.startBtn.addEventListener('click', start);
   ui.retryBtn.addEventListener('click', restart);
 
-  // ---------- Milestone toast ----------
   function toast(msg) {
     ui.toast.textContent = msg;
     ui.toast.classList.remove('show'); void ui.toast.offsetWidth;
     ui.toast.classList.add('show');
+  }
+
+
+  // ---------- Level gate system ----------
+  // Gap positions per transition: [rowA_x, rowB_x] so player zig-zags
+  const GATE_GAP_W  = 22;
+  const GATE_CONFIGS = [
+    { a: -24, b:  24 },  // FIRE→ICE
+    { a:  24, b: -24 },  // ICE→NEON
+    { a: -24, b:  24 },  // NEON→ACID
+    { a:  24, b: -24 },  // ACID→VOID
+  ];
+  const gateGeo   = new THREE.BoxGeometry(1, 1, 1);
+  const gateGroup = new THREE.Group();
+  scene.add(gateGroup);
+  let pendingLevel = -1;
+
+  function clearGate() {
+    for (let i = gateGroup.children.length - 1; i >= 0; i--) {
+      gateGroup.children[i].material.dispose();
+      gateGroup.remove(gateGroup.children[i]);
+    }
+    pendingLevel = -1;
+  }
+
+  function spawnGate(lvlIdx) {
+    clearGate();
+    pendingLevel = lvlIdx;
+    const { a, b } = GATE_CONFIGS[lvlIdx - 1];
+    const pal = LEVELS[lvlIdx].pal;
+    const fh  = fieldHalf();
+    [[a, 0], [b, -48]].forEach(([gapX, rowZ]) => {
+      for (let x = -fh + 4; x <= fh - 4; x += 5.5) {
+        if (Math.abs(x - gapX) < GATE_GAP_W / 2) continue;
+        const s   = 2.8 + Math.random() * 1.6;
+        const mat = new THREE.MeshLambertMaterial({ color: pal[(Math.random() * pal.length) | 0] });
+        const mesh = new THREE.Mesh(gateGeo, mat);
+        mesh.scale.setScalar(s);
+        mesh.position.set(x + (Math.random() - 0.5) * 1.5, s / 2, rowZ + (Math.random() - 0.5) * 2);
+        mesh.rotation.y = Math.random() * Math.PI;
+        gateGroup.add(mesh);
+      }
+    });
+    gateGroup.position.set(-state.px, 0, player.position.z - 110);
+  }
+
+  function changeLevel(idx) {
+    state.level = idx;
+    activePalette = LEVELS[idx].pal;
+    // Set gapSide BEFORE respawning so initial cube x-positions are biased to one side
+    state.gapSide = -1;
+    state.entryTimer = 10.0;
+    state.gapTimer = 1.5;
+    // Redistribute all cubes across full depth with a 120-unit clear zone at the front
+    for (let i = 0; i < CUBE_COUNT; i++) {
+      const zBase = -(120 + Math.random() * (SPAWN_DEPTH - 30));
+      respawnCube(i, zBase, false);
+    }
+    if (cubes.instanceColor) cubes.instanceColor.needsUpdate = true;
+    toast(LEVELS[idx].name);
+    if (navigator.vibrate) navigator.vibrate([20, 20, 60]);
   }
 
   // ---------- Main loop ----------
@@ -491,42 +954,146 @@
     const dt = Math.min(clock.getDelta(), 1 / 20);
     state.t += dt;
 
+    if (!state.running) {
+      // Idle preview drift
+      const idleSpeed = 14;
+      const idleDz = idleSpeed * dt;
+      state.scroll += idleDz;
+      groundMat.uniforms.uScroll.value = state.scroll;
+      for (let i = 0; i < CUBE_COUNT; i++) {
+        const c = C[i];
+        c.z += idleDz;
+        if (c.z > 6) {
+          respawnCube(i, -SPAWN_DEPTH + (c.z - 6) % 40, false);
+          if (cubes.instanceColor) cubes.instanceColor.needsUpdate = true;
+        }
+        c.rot += c.spin * dt;
+        dummy.position.set(c.x, c.y, c.z);
+        dummy.rotation.set(0, c.rot, 0);
+        dummy.scale.setScalar(c.s);
+        dummy.updateMatrix();
+        cubes.setMatrixAt(i, dummy.matrix);
+      }
+      cubes.instanceMatrix.needsUpdate = true;
+    }
+
     if (state.running) {
-      // --- difficulty ramp: speed grows continuously, eases toward max
-      const ramp = 1 - Math.exp(-state.score / 220);            // 0→1
+      if (state.grace > 0) state.grace -= dt;
+
+      // difficulty ramp — slow build that takes much longer to reach top speed
+      const ramp = Math.pow(Math.min(state.score / 900, 1), 2.2);
       state.speed = state.baseSpeed + (state.maxSpeed - state.baseSpeed) * ramp;
+      Music.setSpeed(ramp);
       const velMult = state.speed / state.baseSpeed;
       ui.vel.textContent = velMult.toFixed(1);
 
       // milestone toasts every 100 pts
       const ms = Math.floor(state.score / 100);
-      if (ms > state.lastMilestone) { state.lastMilestone = ms; toast('Velocity ' + velMult.toFixed(1) + '×'); if (navigator.vibrate) navigator.vibrate(20); }
+      if (ms > state.lastMilestone) {
+        state.lastMilestone = ms;
+        toast('Velocity ' + velMult.toFixed(1) + '×');
+        if (navigator.vibrate) navigator.vibrate(20);
+      }
 
-      // --- steering
-      let steer = state.tilt;
-      if (keys['ArrowLeft'] || keys['a']) steer = -1;
-      if (keys['ArrowRight'] || keys['d']) steer = 1;
-      const steerSpeed = 42 + velMult * 10;                      // handling scales w/ speed
-      state.px = THREE.MathUtils.clamp(state.px + steer * steerSpeed * dt, -FIELD_HALF + 4, FIELD_HALF - 4);
+      // level transition: spawn gate when score hits threshold
+      const nextLvl = state.level + 1;
+      if (nextLvl < LEVELS.length && state.score >= LEVELS[nextLvl].score && pendingLevel < 0) spawnGate(nextLvl);
 
-      // --- score = distance
-      state.score += state.speed * dt * 0.18;
-      ui.score.textContent = fmt(state.score);
+      // skin unlock check
+      for (const skin of SKINS) {
+        if (!unlockedSkins.has(skin.id) && state.score >= skin.unlock) {
+          unlockedSkins.add(skin.id);
+          newSkinsThisRun.push(skin.id);
+          activeSkinId = skin.id;
+          applySkin(skin);
+          toast('New Skin: ' + skin.name + '!');
+          saveSkins();
+          renderSkinUI();
+        }
+      }
 
-      // --- move cube field toward player
+      // steering — keys only active while held; release = go straight; smooth lerp for feel
+      let steerTarget;
+      if (keys['ArrowLeft'] || keys['a']) steerTarget = -1;
+      else if (keys['ArrowRight'] || keys['d']) steerTarget = 1;
+      else if (touchSteer !== 0) steerTarget = touchSteer;
+      else steerTarget = state.tilt;
+      // engage fast, release slowly so the arrow glides back rather than snapping
+      const steerLerp = Math.abs(steerTarget) >= Math.abs(state.steer)
+        ? Math.min(1, 14 * dt)
+        : Math.min(1, 5 * dt);
+      state.steer = THREE.MathUtils.lerp(state.steer, steerTarget, steerLerp);
+      const steerSpeed = 42 + velMult * 10;
+      const fh = fieldHalf();
+      state.px = THREE.MathUtils.clamp(state.px + state.steer * steerSpeed * dt, -fh + 4, fh - 4);
+
+      // score + streak multiplier
+      if (state.grace <= 0) {
+        const base = state.speed * dt * 0.18;
+        state.score += base * state.multiplier;
+        state.streakDist += base;
+        if (state.streakDist > 150 && state.multiplier < 1.5) {
+          state.multiplier = 1.5;
+          toast('Streak ×1.5');
+          ui.multPill.classList.add('on');
+        }
+        ui.score.textContent = fmt(state.score);
+      }
+
+      // trail emission
+      trailTimer -= dt;
+      if (trailTimer <= 0) {
+        trailTimer = 0.025;
+        const tp = TP[trailHead % TRAIL_COUNT];
+        trailHead++;
+        tp.x = player.position.x + (Math.random() - 0.5) * 0.5;
+        tp.y = player.position.y - 0.1 + (Math.random() - 0.5) * 0.3;
+        tp.z = player.position.z + 0.4 + Math.random() * 0.8;
+        tp.maxLife = tp.life = 0.3 + Math.random() * 0.18;
+      }
+
+      // gap corridor / entry zig-zag timer
+      if (state.score > 50) {
+        if (state.entryTimer > 0) {
+          // Guided entry: alternate corridor sides every 1.5 s for a zig-zag feel
+          state.entryTimer -= dt;
+          state.gapTimer -= dt;
+          if (state.gapTimer <= 0) {
+            state.gapSide = state.gapSide === 1 ? -1 : 1;
+            state.gapTimer = 1.5;
+          }
+          if (state.entryTimer <= 0) {
+            state.gapSide = 0;
+            state.gapTimer = 1.0;
+          }
+        } else {
+          state.gapTimer -= dt;
+          if (state.gapTimer <= 0) {
+            if (state.gapSide !== 0) {
+              state.gapSide = 0;
+              state.gapTimer = 1.5 + Math.random() * 1.5;
+            } else {
+              state.gapSide = Math.random() < 0.5 ? -1 : 1;
+              state.gapTimer = 2.0 + Math.random() * 1.5;
+            }
+          }
+        }
+      }
+
+      // move cube field
       const dz = state.speed * dt;
       state.scroll += dz;
       groundMat.uniforms.uScroll.value = state.scroll;
       const density = densityForScore(state.score);
       const activeCount = Math.floor(CUBE_COUNT * density);
+      const pz = player.position.z;
 
       for (let i = 0; i < CUBE_COUNT; i++) {
         const c = C[i];
         c.z += dz;
         if (c.z > 6) {
           respawnCube(i, -SPAWN_DEPTH + (c.z - 6) % 40, false);
-          // lightly bias new cubes toward player lane as difficulty rises
-          if (Math.random() < 0.25 * density) c.x = THREE.MathUtils.clamp(state.px + (Math.random()*2-1)*30, -FIELD_HALF, FIELD_HALF);
+          if (Math.random() < 0.10 * density) c.x = THREE.MathUtils.clamp(state.px + (Math.random()*2-1)*30, -fh, fh);
           if (cubes.instanceColor) cubes.instanceColor.needsUpdate = true;
         }
         c.rot += c.spin * dt;
@@ -538,37 +1105,71 @@
         dummy.updateMatrix();
         cubes.setMatrixAt(i, dummy.matrix);
 
-        // --- collision (AABB vs player point w/ radius)
-        if (!hidden) {
+        if (!hidden && state.grace <= 0) {
           const half = c.s / 2;
-          const px = 0, pz = player.position.z;           // player is at x=0 in world (field shifts)
-          if (Math.abs(c.x - state.px - px) < half + 0.85 &&
-              Math.abs(c.z - pz) < half + 0.85) {
+          const xd = Math.abs(c.x - state.px);
+          const zd = Math.abs(c.z - pz);
+
+          // collision
+          if (xd < half + 0.85 && zd < half + 0.85) {
             die();
+          }
+
+          // near-miss: cube just cleared the player
+          if (!c.passed && c.z > pz + 0.8) {
+            c.passed = true;
+            if (xd >= half + 0.85 && xd < half + 3.0) {
+              emitSparks(c.x - state.px, pz);
+              state.streakDist = 0;
+              if (state.multiplier > 1) {
+                state.multiplier = 1.0;
+                ui.multPill.classList.remove('on');
+              }
+            }
           }
         }
       }
       cubes.instanceMatrix.needsUpdate = true;
 
-      // --- speed lines
+      // speed lines
       lineMat.opacity = THREE.MathUtils.clamp((velMult - 1.4) * 0.25, 0, 0.5);
       for (let i = 0; i < LINES; i++) {
         L[i].z += dz * 1.6;
         if (L[i].z > 4) resetLine(i, false);
         const o = i * 6, len = 2 + velMult * 1.5;
         linePos[o] = L[i].x - state.px * .4; linePos[o+1] = L[i].y; linePos[o+2] = L[i].z;
-        linePos[o+3] = linePos[o];           linePos[o+4] = L[i].y; linePos[o+5] = L[i].z - len;
+        linePos[o+3] = linePos[o];             linePos[o+4] = L[i].y; linePos[o+5] = L[i].z - len;
       }
       lineGeo.attributes.position.needsUpdate = true;
+
+      // gate: move + collide + level-change on pass
+      if (pendingLevel >= 0) {
+        gateGroup.position.x = -state.px;
+        gateGroup.position.z += dz;
+        if (state.grace <= 0) {
+          const pzG = player.position.z;
+          for (let i = 0; i < gateGroup.children.length; i++) {
+            const m  = gateGroup.children[i];
+            const wz = gateGroup.position.z + m.position.z;
+            if (Math.abs(wz - pzG) > m.scale.z / 2 + 1.2) continue;
+            if (Math.abs(m.position.x - state.px) < m.scale.x / 2 + 0.85) { die(); break; }
+          }
+        }
+        // both rows fully past player → fire level change
+        if (gateGroup.position.z > player.position.z + 55) {
+          changeLevel(pendingLevel);
+          clearGate();
+        }
+      }
     }
 
-    // --- player visuals (always animate a bit)
-    const bank = THREE.MathUtils.lerp(player.rotation.z, -state.tilt * 0.55, 0.18);
+    // player visuals (always animate)
+    const bank = THREE.MathUtils.lerp(player.rotation.z, -state.steer * 0.55, 0.18);
     player.rotation.z = state.running ? bank : THREE.MathUtils.lerp(player.rotation.z, 0, .1);
     player.position.y = 0.55 + Math.sin(state.t * 3.1) * 0.07;
     ring.material.opacity = 0.28 + Math.sin(state.t * 5) * 0.08;
 
-    // --- camera: subtle lean + FOV stretch with speed + shake
+    // camera: FOV stretch + shake
     const velMult = state.speed / state.baseSpeed || 1;
     const targetFov = 72 + Math.min(18, (velMult - 1) * 6);
     camera.fov = THREE.MathUtils.lerp(camera.fov, state.running ? targetFov : 72, 0.06);
@@ -579,25 +1180,357 @@
       sx = (Math.random()-.5) * state.shake * 1.6;
       sy = (Math.random()-.5) * state.shake * 1.6;
     }
-    camera.position.set(camBase.x + state.tilt * -0.8 + sx, camBase.y + sy, camBase.z);
-    camera.rotation.z = THREE.MathUtils.lerp(camera.rotation.z, state.running ? state.tilt * 0.06 : 0, 0.1);
+    camera.position.set(camBase.x + state.steer * -0.8 + sx, camBase.y + sy, camBase.z);
+    camera.rotation.z = THREE.MathUtils.lerp(camera.rotation.z, state.running ? state.steer * 0.06 : 0, 0.1);
+
+    // dynamic sky / fog: shifts toward deep red at high velocity
+    const velFrac = THREE.MathUtils.clamp((velMult - 1.3) / 2.2, 0, 1);
+    tgtSkyTop.copy(SKY_TOP).lerp(SKY_TOP_HOT, velFrac);
+    tgtSkyBot.copy(SKY_BOT).lerp(SKY_BOT_HOT, velFrac);
+    skyMat.uniforms.top.value.lerp(tgtSkyTop, 0.04);
+    skyMat.uniforms.bot.value.lerp(tgtSkyBot, 0.04);
+    tgtFog.copy(FOG_BASE).lerp(FOG_HOT, velFrac * 0.65);
+    scene.fog.color.lerp(tgtFog, 0.04);
+    groundMat.uniforms.fogColor.value.copy(scene.fog.color);
+
+    // animate near-miss sparks
+    if (sparkAlive) {
+      let maxLife = 0;
+      for (let i = 0; i < SPARK_COUNT; i++) {
+        const s = SP[i];
+        if (s.life <= 0) continue;
+        s.life -= dt;
+        if (s.life <= 0) continue;
+        s.vy -= 10 * dt;
+        sparkBuf[i*3]   += s.vx * dt;
+        sparkBuf[i*3+1]  = Math.max(0, sparkBuf[i*3+1] + s.vy * dt);
+        sparkBuf[i*3+2] += s.vz * dt;
+        if (s.life > maxLife) maxLife = s.life;
+      }
+      sparkMat.opacity = maxLife > 0 ? Math.min(0.9, maxLife * 5) : 0;
+      sparkGeo.attributes.position.needsUpdate = true;
+      if (maxLife <= 0) { sparkAlive = false; sparkMat.opacity = 0; }
+    }
+
+    // animate trail particles
+    {
+      const trailDz = state.running ? state.speed * dt : 0;
+      const activeSkin = SKINS.find(s => s.id === activeSkinId);
+      let anyAlive = false;
+      for (let i = 0; i < TRAIL_COUNT; i++) {
+        const t = TP[i];
+        if (t.life > 0) {
+          t.life -= dt;
+          t.z += trailDz;
+          if (t.life > 0) {
+            trailBuf[i*3]   = t.x;
+            trailBuf[i*3+1] = t.y;
+            trailBuf[i*3+2] = t.z;
+            anyAlive = true;
+          } else {
+            trailBuf[i*3+1] = -100;
+          }
+        }
+      }
+      const targetOpacity = (anyAlive && state.running && activeSkin) ? activeSkin.trailOpacity : 0;
+      trailMat.opacity = THREE.MathUtils.lerp(trailMat.opacity, targetOpacity, 0.15);
+      trailGeo.attributes.position.needsUpdate = true;
+    }
+
+    // animate death fragments
+    fragData.forEach(f => {
+      if (f.life <= 0) return;
+      f.life -= dt;
+      f.vy -= 14 * dt;
+      f.mesh.position.x += f.vx * dt;
+      f.mesh.position.y  = Math.max(-1, f.mesh.position.y + f.vy * dt);
+      f.mesh.position.z += f.vz * dt;
+      f.mesh.rotation.x += f.rx * dt;
+      f.mesh.rotation.y += f.ry * dt;
+      f.mesh.rotation.z += f.rz * dt;
+      f.mesh.material.opacity = Math.max(0, f.life / f.maxLife);
+      if (f.life <= 0) f.mesh.visible = false;
+    });
 
     renderer.render(scene, camera);
   }
 
-  // ---------- Resize ----------
   addEventListener('resize', () => {
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
   });
 
+  // ---------- Global Leaderboard ----------
+  async function fetchScores() {
+    try {
+      const r = await fetch('/api/scores');
+      if (!r.ok) return [];
+      return (await r.json()).scores || [];
+    } catch { return []; }
+  }
+
+  async function submitScore(initials, score) {
+    try {
+      const r = await fetch('/api/scores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initials, score }),
+      });
+      if (!r.ok) return [];
+      return (await r.json()).scores || [];
+    } catch { return []; }
+  }
+
+  function renderLb(el, scores, highlight, highlightInitials) {
+    if (!el || !scores || !scores.length) { if (el) el.innerHTML = ''; return; }
+    el.innerHTML = '<div class="lb-title">High Scores</div>' +
+      scores.map((s, i) => {
+        const mine = highlight && s.score === highlight && (!highlightInitials || s.initials === highlightInitials);
+        return `<div class="lb-row${mine ? ' mine' : ''}"><span class="lb-rank">${i + 1}</span><span class="lb-init">${s.initials}</span><span class="lb-score">${fmt(s.score)}</span></div>`;
+      }).join('');
+  }
+
+  const initialsInputEl = document.getElementById('initialsInput');
+  const submitBtnEl = document.getElementById('submitBtn');
+
+  initialsInputEl.addEventListener('input', e => {
+    e.target.value = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  });
+  initialsInputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitBtnEl.click();
+  });
+  submitBtnEl.addEventListener('click', async () => {
+    const val = initialsInputEl.value.trim().toUpperCase().slice(0, 3);
+    if (!val) { initialsInputEl.focus(); return; }
+    submitBtnEl.disabled = true;
+    submitBtnEl.textContent = '···';
+    const scores = await submitScore(val, pendingScore);
+    document.getElementById('initialsWrap').classList.add('hidden');
+    // Show rank badge
+    const rank = scores.findIndex(s => s.score === pendingScore && s.initials === val) + 1;
+    const rankDisplay = document.getElementById('rankDisplay');
+    rankDisplay.innerHTML = rank > 0
+      ? `<div class="rank-label">You ranked</div><div class="rank-num">#${rank}</div>`
+      : '';
+    rankDisplay.classList.toggle('hidden', rank === 0);
+    // Show leaderboard with your entry highlighted
+    renderLb(document.getElementById('deathLb'), scores, pendingScore, val);
+    // Refresh skin dots (may have unlocked something)
+    renderSkinUI();
+    submitBtnEl.disabled = false;
+    submitBtnEl.textContent = 'Submit';
+  });
+
+  // ---------- Settings panel ----------
+  const settingsBtn   = document.getElementById('settingsBtn');
+  const settingsPanel = document.getElementById('settingsPanel');
+  const volSlider     = document.getElementById('volSlider');
+  const sensSlider    = document.getElementById('sensSlider');
+  const volVal        = document.getElementById('volVal');
+  const sensVal       = document.getElementById('sensVal');
+
+  function loadSettings() {
+    try {
+      const v = localStorage.getItem('cube-runner-vol');
+      if (v !== null) { volSlider.value = v; }
+      const s = localStorage.getItem('cube-runner-sens');
+      if (s !== null) { sensSlider.value = s; }
+    } catch {}
+    applyVolume(); applySensitivity();
+  }
+  function saveSettings() {
+    try {
+      localStorage.setItem('cube-runner-vol',  volSlider.value);
+      localStorage.setItem('cube-runner-sens', sensSlider.value);
+    } catch {}
+  }
+  function applyVolume() {
+    const v = parseInt(volSlider.value);
+    volVal.textContent = v + '%';
+    Music.setVolume(v / 100 * 0.85);
+  }
+  function applySensitivity() {
+    const s = parseInt(sensSlider.value);
+    sensVal.textContent = s + '%';
+    tiltDiv = Math.round(45 - (s / 100) * 33); // 50% → ~28 (close to original 26)
+  }
+
+  volSlider.addEventListener('input',  () => { applyVolume();      saveSettings(); });
+  sensSlider.addEventListener('input', () => { applySensitivity(); saveSettings(); });
+
+  settingsBtn.addEventListener('click', () => {
+    skinPanelOpen = !skinPanelOpen;
+    settingsPanel.classList.toggle('open', skinPanelOpen);
+    if (skinPanelOpen) renderSkinUI();
+  });
+
+  document.addEventListener('pointerdown', e => {
+    if (skinPanelOpen && !settingsPanel.contains(e.target) && e.target !== settingsBtn) {
+      closeSettingsPanel();
+    }
+  });
+
+  loadSettings();
+
   // ---------- Boot ----------
   for (let i = 0; i < CUBE_COUNT; i++) respawnCube(i, -20, true);
   if (cubes.instanceColor) cubes.instanceColor.needsUpdate = true;
   loadBest();
+  loadSkins();
+  fetchScores().then(s => renderLb(document.getElementById('startLb'), s));
   frame();
 })();
+
+// ============================================================
+// AUDIO ENGINE — procedural techno, 90→180 BPM
+// ============================================================
+const Music = (() => {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  let ctx = null, master = null;
+  let muted = false, running = false, timerId = null;
+  let nextTime = 0, step = 0, barStep = 0;
+  let currentBPM = 90;
+  const AHEAD = 0.12;
+
+  //  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+  const KICK  = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0];
+  const SNARE = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
+  const OHAT  = [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0];
+  const CHAT  = [1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1];
+  const BASS_P= [1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0];
+  const BASS_F= [55,0, 0,55, 0, 0,73.4,0,55, 0, 0, 0, 0,82.4,0,0];
+  const PAD_CHORDS = [
+    [55, 65.4, 82.4],
+    [55, 65.4, 87.3],
+    [49, 61.7, 73.4],
+    [55, 65.4, 82.4],
+  ];
+
+  function kick(t) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(master);
+    o.frequency.setValueAtTime(160, t);
+    o.frequency.exponentialRampToValueAtTime(26, t + 0.44);
+    g.gain.setValueAtTime(2.0, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    o.start(t); o.stop(t + 0.55);
+  }
+
+  function snare(t) {
+    const len = Math.ceil(ctx.sampleRate * 0.18);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2800; bp.Q.value = 0.7;
+    const g = ctx.createGain();
+    src.connect(bp); bp.connect(g); g.connect(master);
+    g.gain.setValueAtTime(0.55, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    src.start(t); src.stop(t + 0.2);
+    const o = ctx.createOscillator(), g2 = ctx.createGain();
+    o.connect(g2); g2.connect(master); o.frequency.value = 190;
+    g2.gain.setValueAtTime(0.3, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+    o.start(t); o.stop(t + 0.09);
+  }
+
+  function hihat(t, open) {
+    const dur = open ? 0.13 : 0.038;
+    const vol = open ? 0.28 : 0.14;
+    const len = Math.ceil(ctx.sampleRate * (dur + 0.02));
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 8000;
+    const g = ctx.createGain();
+    src.connect(hp); hp.connect(g); g.connect(master);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.start(t); src.stop(t + dur + 0.01);
+  }
+
+  function bass(t, freq) {
+    const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = freq;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 290; lp.Q.value = 7;
+    const g = ctx.createGain();
+    o.connect(lp); lp.connect(g); g.connect(master);
+    g.gain.setValueAtTime(0.85, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.17);
+    o.start(t); o.stop(t + 0.2);
+  }
+
+  function pad(t) {
+    const chord = PAD_CHORDS[barStep % PAD_CHORDS.length]; barStep++;
+    const dur = (60 / currentBPM / 4) * 16;
+    chord.forEach(f => {
+      const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
+      const g = ctx.createGain();
+      o.connect(g); g.connect(master);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.055, t + 0.4);
+      g.gain.setValueAtTime(0.055, t + dur - 0.4);
+      g.gain.linearRampToValueAtTime(0, t + dur);
+      o.start(t); o.stop(t + dur + 0.01);
+    });
+  }
+
+  function scheduleStep(s, t) {
+    if (KICK[s])  kick(t);
+    if (SNARE[s]) snare(t);
+    if (OHAT[s])  hihat(t, true);
+    if (CHAT[s])  hihat(t, false);
+    if (BASS_P[s] && BASS_F[s]) bass(t, BASS_F[s]);
+    if (s === 0)  pad(t);
+  }
+
+  function tick() {
+    if (!running || !ctx) return;
+    while (nextTime < ctx.currentTime + AHEAD) {
+      scheduleStep(step, nextTime);
+      step = (step + 1) % 16;
+      nextTime += 60 / currentBPM / 4;
+    }
+  }
+
+  let currentVol = 0.55;
+  return {
+    start() {
+      if (!ctx) {
+        ctx = new AC();
+        master = ctx.createGain();
+        master.gain.value = currentVol;
+        master.connect(ctx.destination);
+      }
+      if (ctx.state === 'suspended') ctx.resume();
+      if (running) return;
+      currentBPM = 90;
+      running = true; step = 0; barStep = 0;
+      nextTime = ctx.currentTime + 0.08;
+      timerId = setInterval(tick, 20);
+    },
+    setSpeed(t) { currentBPM = 90 + t * 90; },
+    setVolume(v) {
+      currentVol = v;
+      if (master) master.gain.setTargetAtTime(v, ctx.currentTime, 0.04);
+    },
+  };
+})();
+
+// M key — mute toggle via volume slider
+document.addEventListener('keydown', e => {
+  if (e.key !== 'm' && e.key !== 'M') return;
+  const slider = document.getElementById('volSlider');
+  if (!slider) return;
+  if (parseFloat(slider.value) > 0) {
+    slider._savedVol = slider.value;
+    slider.value = 0;
+  } else {
+    slider.value = slider._savedVol || 65;
+  }
+  slider.dispatchEvent(new Event('input'));
+});
+
+document.getElementById('startBtn').addEventListener('click', () => Music.start());
+document.getElementById('retryBtn').addEventListener('click', () => Music.start());
 </script>
 </body>
 </html>
