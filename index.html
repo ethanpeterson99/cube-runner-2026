@@ -49,6 +49,11 @@
   #multPill { opacity:0; transition:opacity .35s; }
   #multPill.on { opacity:1; }
   #multPill .pill { border-color:rgba(255,210,63,.35); box-shadow:0 0 14px rgba(255,210,63,.18); }
+  #powerPill { opacity:0; transition:opacity .3s; }
+  #powerPill.on { opacity:1; }
+  #powerPill .pill { display:flex; flex-direction:column; align-items:center; gap:5px; border-color:rgba(255,255,255,.3); box-shadow:0 0 14px rgba(255,255,255,.16); }
+  #powerPill .pbar { width:92px; height:3px; border-radius:2px; background:rgba(242,244,255,.15); overflow:hidden; }
+  #powerPill .pbar i { display:block; height:100%; width:100%; background:var(--accent2); }
 
   /* ---------- Overlays ---------- */
   .overlay {
@@ -241,6 +246,7 @@
 <div id="speedo">
   <div class="pill">VEL <b id="vel">1.0</b>×</div>
   <div id="multPill"><div class="pill">STREAK <b>×1.5</b></div></div>
+  <div id="powerPill"><div class="pill"><b id="powerName">SLOW-MO</b><div class="pbar"><i id="powerBar"></i></div></div></div>
 </div>
 <div id="toast">Velocity Up</div>
 
@@ -472,6 +478,9 @@ const Music = (() => {
     flash:      document.getElementById('flash'),
     toast:      document.getElementById('toast'),
     multPill:   document.getElementById('multPill'),
+    powerPill:  document.getElementById('powerPill'),
+    powerName:  document.getElementById('powerName'),
+    powerBar:   document.getElementById('powerBar'),
   };
 
   // ---------- Renderer / Scene ----------
@@ -756,7 +765,9 @@ const Music = (() => {
     hallMesh.setColorAt(i, color);
     if (state.grace <= 0) {
       const half = HALL_S / 2;
-      if (Math.abs(x - state.px) < half + 0.85 && Math.abs(zRow - pz) < half + 0.85) die();
+      if (Math.abs(x - state.px) < half + 0.85 && Math.abs(zRow - pz) < half + 0.85) {
+        if (pw.phaseT <= 0 && !tryShield()) die();
+      }
     }
     return i + 1;
   }
@@ -864,6 +875,100 @@ const Music = (() => {
     sparkMat.opacity = 0.9;
     sparkAlive = true;
     sparkGeo.attributes.position.needsUpdate = true;
+  }
+
+  // ---------- Power-up orbs ----------
+  const POWERUPS = [
+    { id: 'slowmo', name: 'Slow-Mo',  color: 0x00e5ff, toast: '#00e5ff' },
+    { id: 'phase',  name: 'Phase',    color: 0xb060ff, toast: '#c080ff' },
+    { id: 'blast',  name: 'Blaster',  color: 0xff5a1f, toast: '#ff7a3a' },
+    { id: 'warp',   name: 'Warp',     color: 0x2bff88, toast: '#3dff99' },
+    { id: 'shield', name: 'Shield',   color: 0xffcf3f, toast: '#ffd23f' },
+    { id: 'x2',     name: 'Score ×2', color: 0xff36c8, toast: '#ff5ad6' },
+  ];
+  const ORB_POOL = 3, ORB_R = 1.5, ORB_PICK = 2.6;
+  const orbCoreGeo = new THREE.SphereGeometry(ORB_R, 16, 16);
+  const orbHaloGeo = new THREE.SphereGeometry(ORB_R * 1.9, 16, 16);
+  const orbs = Array.from({ length: ORB_POOL }, () => {
+    const g = new THREE.Group();
+    const core = new THREE.Mesh(orbCoreGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true }));
+    const halo = new THREE.Mesh(orbHaloGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide }));
+    g.add(core); g.add(halo); g.visible = false; scene.add(g);
+    return { group: g, core, halo, active: false, type: null, x: 0, z: 0, phase: Math.random() * 6.28 };
+  });
+
+  // power-up effect state + tuning
+  const pw = { slowT: 0, phaseT: 0, x2T: 0, shield: false, warpFlash: 0 };
+  const SLOW_DUR = 4, PHASE_DUR = 4, X2_DUR = 6, WARP_DIST = 120, WARP_GRACE = 0.8;
+  const SLOW_FACTOR = 0.45, BLAST_HALF_X = 14, BLAST_AHEAD = 90;
+  let nextOrbTrack = 220;
+
+  function trySpawnOrb() {
+    const slot = orbs.find(o => !o.active);
+    if (!slot) return;
+    const def = POWERUPS[(Math.random() * POWERUPS.length) | 0];
+    slot.core.material.color.setHex(def.color);
+    slot.halo.material.color.setHex(def.color);
+    // place x in the clear lane (inside corridor walls if a corridor is near), biased near the player
+    const g = hallGeom(state.scroll + 60);
+    let x;
+    if (g) { x = g.center + (Math.random() * 2 - 1) * (g.laneHalf - ORB_R - 1); }
+    else   { x = state.px + (Math.random() * 2 - 1) * 26; x = THREE.MathUtils.clamp(x, -(fieldHalf() - 6), fieldHalf() - 6); }
+    slot.type = def.id; slot.x = x; slot.z = -SPAWN_DEPTH; slot.active = true; slot.group.visible = true;
+  }
+
+  function applyPowerup(type) {
+    const def = POWERUPS.find(p => p.id === type);
+    toast(def.name, def.toast);
+    if (navigator.vibrate) navigator.vibrate(30);
+    switch (type) {
+      case 'slowmo': pw.slowT = SLOW_DUR; break;
+      case 'phase':  pw.phaseT = PHASE_DUR; break;
+      case 'x2':     pw.x2T = X2_DUR; break;
+      case 'shield': pw.shield = true; break;
+      case 'blast':  doBlast(); break;
+      case 'warp':   doWarp(); break;
+    }
+  }
+
+  function tryShield() {
+    if (!pw.shield) return false;
+    pw.shield = false;
+    state.grace = Math.max(state.grace, 0.6);
+    emitSparks(0, player.position.z);
+    state.shake = Math.max(state.shake, 0.4);
+    toast('Shield Down', '#ffd23f');
+    return true;
+  }
+
+  function doBlast() {
+    const pz = player.position.z;
+    for (let i = 0; i < CUBE_COUNT; i++) {
+      const c = C[i];
+      if (c.passed || c.z > pz + 2 || c.z < pz - BLAST_AHEAD) continue;
+      if (Math.abs(c.x - state.px) > BLAST_HALF_X) continue;
+      c.passed = true;
+      respawnCube(i, c.z - SPAWN_DEPTH, false);
+    }
+    if (cubes.instanceColor) cubes.instanceColor.needsUpdate = true;
+    emitSparks(0, pz - 6);
+    state.shake = Math.max(state.shake, 0.5);
+  }
+
+  function doWarp() {
+    state.scroll += WARP_DIST;
+    groundMat.uniforms.uScroll.value = state.scroll;
+    for (let i = 0; i < CUBE_COUNT; i++) {
+      const c = C[i];
+      c.z += WARP_DIST;
+      if (c.z > -40) respawnCube(i, -SPAWN_DEPTH, false);
+    }
+    if (cubes.instanceColor) cubes.instanceColor.needsUpdate = true;
+    for (const o of orbs) { if (o.active) { o.z += WARP_DIST; if (o.z > 6) { o.active = false; o.group.visible = false; } } }
+    if (hallActive) { const g = hallGeom(state.scroll); if (g) state.px = THREE.MathUtils.clamp(state.px, g.center - g.laneHalf + 4, g.center + g.laneHalf - 4); }
+    state.grace = Math.max(state.grace, WARP_GRACE);
+    pw.warpFlash = 0.35;
+    state.shake = Math.max(state.shake, 0.4);
   }
 
   // ---------- Death explosion fragments ----------
@@ -1231,6 +1336,13 @@ const Music = (() => {
     nextHallTrack = 360;
     hallMesh.count = 0;
     runTouchedL = false; runTouchedR = false; streakHold = 0;
+    // power-ups
+    pw.slowT = 0; pw.phaseT = 0; pw.x2T = 0; pw.shield = false; pw.warpFlash = 0;
+    nextOrbTrack = 220;
+    for (const o of orbs) { o.active = false; o.group.visible = false; }
+    ui.powerPill.classList.remove('on');
+    arrowMat.opacity = 1; arrowMat.transparent = false;
+    ui.toast.style.color = ''; ui.toast.style.textShadow = '';
     tiltZero = hasTilt ? lastTiltDeg : null;
 
     C.forEach(c => c.passed = false);
@@ -1337,8 +1449,10 @@ const Music = (() => {
   ui.startBtn.addEventListener('click', start);
   ui.retryBtn.addEventListener('click', restart);
 
-  function toast(msg) {
+  function toast(msg, color) {
     ui.toast.textContent = msg;
+    ui.toast.style.color = color || 'var(--accent2)';
+    ui.toast.style.textShadow = '0 0 30px ' + (color || 'rgba(255,210,63,.6)');
     ui.toast.classList.remove('show'); void ui.toast.offsetWidth;
     ui.toast.classList.add('show');
   }
@@ -1394,6 +1508,13 @@ const Music = (() => {
     if (state.running) {
       if (state.grace > 0) state.grace -= dt;
 
+      // power-up timers
+      if (pw.slowT > 0)     pw.slowT     -= dt;
+      if (pw.phaseT > 0)    pw.phaseT    -= dt;
+      if (pw.x2T > 0)       pw.x2T       -= dt;
+      if (pw.warpFlash > 0) pw.warpFlash -= dt;
+      const slow = pw.slowT > 0 ? SLOW_FACTOR : 1;
+
       // difficulty ramp — slow build that takes much longer to reach top speed
       const ramp = Math.pow(Math.min(state.score / 900, 1), 2.2);
       state.speed = state.baseSpeed + (state.maxSpeed - state.baseSpeed) * ramp;
@@ -1444,8 +1565,9 @@ const Music = (() => {
 
       // score + streak multiplier
       if (state.grace <= 0) {
-        const base = state.speed * dt * 0.18;
-        state.score += base * state.multiplier;
+        const base = state.speed * dt * slow * 0.18;
+        const x2 = pw.x2T > 0 ? 2 : 1;
+        state.score += base * state.multiplier * x2;
         state.streakDist += base;
         if (state.streakDist > 150 && state.multiplier < 1.5) {
           state.multiplier = 1.5;
@@ -1467,8 +1589,8 @@ const Music = (() => {
         tp.maxLife = tp.life = 0.3 + Math.random() * 0.18;
       }
 
-      // advance the world
-      const dz = state.speed * dt;
+      // advance the world (slow-mo scales motion, not the difficulty ramp/HUD speed)
+      const dz = state.speed * dt * slow;
       state.scroll += dz;
       groundMat.uniforms.uScroll.value = state.scroll;
       const pz = player.position.z;
@@ -1480,6 +1602,12 @@ const Music = (() => {
         hallActive = false;
         nextHallTrack = state.scroll + HALL_GAP;
         unlockEvent('threader'); // survived a full corridor (a wall hit would have killed us)
+      }
+
+      // power-up orb spawning (distance-gated, like corridors)
+      if (state.score > 15 && state.scroll > nextOrbTrack) {
+        nextOrbTrack = state.scroll + 110 + Math.random() * 90;
+        trySpawnOrb();
       }
 
       // walls (own mesh) — drawn whenever a corridor is scheduled so it fades up far ahead
@@ -1513,9 +1641,9 @@ const Music = (() => {
           const xd = Math.abs(c.x - state.px);
           const zd = Math.abs(c.z - pz);
 
-          // collision
+          // collision (phase passes through; shield absorbs one hit)
           if (xd < half + 0.85 && zd < half + 0.85) {
-            die();
+            if (pw.phaseT <= 0 && !tryShield()) die();
           }
 
           // near-miss: cube just cleared the player
@@ -1535,6 +1663,21 @@ const Music = (() => {
         }
       }
       cubes.instanceMatrix.needsUpdate = true;
+
+      // power-up orbs: drift in with the field, bob/spin/glow, pick up on contact
+      for (const o of orbs) {
+        if (!o.active) continue;
+        o.z += dz;
+        if (o.z > 6) { o.active = false; o.group.visible = false; continue; }
+        o.phase += dt;
+        o.group.position.set(o.x - state.px, 1.6 + Math.sin(o.phase * 2) * 0.4, o.z);
+        o.group.rotation.y += dt * 1.5;
+        o.halo.material.opacity = 0.18 + Math.sin(o.phase * 4) * 0.08;
+        if (Math.abs(o.x - state.px) < ORB_PICK && Math.abs(o.z - pz) < ORB_PICK) {
+          o.active = false; o.group.visible = false;
+          applyPowerup(o.type);
+        }
+      }
 
       // speed lines
       lineMat.opacity = THREE.MathUtils.clamp((velMult - 1.4) * 0.25, 0, 0.5);
@@ -1561,6 +1704,26 @@ const Music = (() => {
       else if (curSkin.anim === 'scroll' && tex) tex.offset.y = (tex.offset.y + dt * 0.5) % 1;
       else if (curSkin.anim === 'shimmer' && tex) tex.rotation = Math.sin(state.t * 0.8) * 0.25;
     }
+
+    // power-up: phase translucency + warp flash on the arrow
+    const phasing = pw.phaseT > 0;
+    arrowMat.transparent = phasing;
+    arrowMat.opacity = phasing ? 0.4 + 0.2 * Math.sin(state.t * 12) : 1;
+    if (pw.warpFlash > 0) { arrowMat.emissiveIntensity = 3.5; ring.material.opacity = 0.9; }
+    else if (curSkin && curSkin.anim !== 'pulse') arrowMat.emissiveIntensity = curSkin.emissiveInt;
+
+    // active power-up HUD pill (show the dominant timed effect, or held shield)
+    let pName = null, pRem = 0, pDur = 1, pCol = '#fff', pStatic = false;
+    if (pw.slowT  > pRem) { pName = 'SLOW-MO';  pRem = pw.slowT;  pDur = SLOW_DUR;  pCol = '#00e5ff'; }
+    if (pw.phaseT > pRem) { pName = 'PHASE';    pRem = pw.phaseT; pDur = PHASE_DUR; pCol = '#c080ff'; }
+    if (pw.x2T    > pRem) { pName = 'SCORE ×2'; pRem = pw.x2T;    pDur = X2_DUR;    pCol = '#ff5ad6'; }
+    if (!pName && pw.shield) { pName = 'SHIELD'; pStatic = true; pCol = '#ffd23f'; }
+    if (pName && state.running) {
+      ui.powerPill.classList.add('on');
+      ui.powerName.textContent = pName;
+      ui.powerBar.style.width = (pStatic ? 100 : Math.max(0, pRem / pDur * 100)) + '%';
+      ui.powerBar.style.background = pCol;
+    } else ui.powerPill.classList.remove('on');
 
     // camera: FOV stretch + shake
     const velMult = state.speed / state.baseSpeed || 1;
