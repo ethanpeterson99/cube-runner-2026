@@ -953,7 +953,7 @@ const Music = (() => {
   });
 
   // power-up effect state + tuning
-  const pw = { slowT: 0, slowDur: 4, phaseT: 0, x2T: 0, x2Mult: 1, x2Dur: 6, blastT: 0, shields: 0, warpFlash: 0, warpInvuln: 0 };
+  const pw = { slowT: 0, slowDur: 4, phaseT: 0, x2T: 0, blastT: 0, shields: 0, warpFlash: 0, warpInvuln: 0 };
   const SLOW_DUR = 4, SLOW_MAX = 14, PHASE_DUR = 4, X2_DUR = 6, WARP_DIST = 120, WARP_INVULN = 2.5, WARP_POINTS = 120;
   const SLOW_FACTOR = 0.45, BLAST_DUR = 5, LASER_LEN = 110, LASER_HALF_X = 5, BLAST_AHEAD = 100;
   let nextOrbTrack = 220;
@@ -1004,7 +1004,7 @@ const Music = (() => {
     switch (type) {
       case 'slowmo': pw.slowDur = Math.min(SLOW_MAX, SLOW_DUR + state.score / 250); pw.slowT = pw.slowDur; break;
       case 'phase':  pw.phaseT = PHASE_DUR; break;
-      case 'x2':     pw.x2Mult = pw.x2T > 0 ? pw.x2Mult * 2 : 2; pw.x2Dur = Math.min(60, X2_DUR * (pw.x2Mult / 2)); pw.x2T = pw.x2Dur; break;
+      case 'x2':     pw.x2T = X2_DUR; break;
       case 'shield': pw.shields++; break;
       case 'blast':  pw.blastT = BLAST_DUR; break;
       case 'warp':   doWarp(); break;
@@ -1429,7 +1429,7 @@ const Music = (() => {
     hallMesh.count = 0;
     runTouchedL = false; runTouchedR = false; streakHold = 0;
     // power-ups
-    pw.slowT = 0; pw.slowDur = SLOW_DUR; pw.phaseT = 0; pw.x2T = 0; pw.x2Mult = 1; pw.x2Dur = X2_DUR;
+    pw.slowT = 0; pw.slowDur = SLOW_DUR; pw.phaseT = 0; pw.x2T = 0;
     pw.blastT = 0; pw.shields = 0; pw.warpFlash = 0; pw.warpInvuln = 0;
     nextOrbTrack = 220;
     for (const o of orbs) { o.active = false; o.group.visible = false; }
@@ -1626,7 +1626,7 @@ const Music = (() => {
       // power-up timers
       if (pw.slowT > 0)     pw.slowT     -= dt;
       if (pw.phaseT > 0)    pw.phaseT    -= dt;
-      if (pw.x2T > 0)       { pw.x2T -= dt; if (pw.x2T <= 0) pw.x2Mult = 1; }
+      if (pw.x2T > 0)       pw.x2T       -= dt;
       if (pw.blastT > 0)    pw.blastT    -= dt;
       if (pw.warpFlash > 0) pw.warpFlash -= dt;
       if (pw.warpInvuln > 0) pw.warpInvuln -= dt;
@@ -1685,7 +1685,7 @@ const Music = (() => {
       // score + streak multiplier
       if (state.grace <= 0) {
         const base = state.speed * dt * slow * 0.18;
-        const x2 = pw.x2T > 0 ? pw.x2Mult : 1;
+        const x2 = pw.x2T > 0 ? 2 : 1;
         state.score += base * state.multiplier * x2;
         state.streakDist += base;
         if (state.streakDist > 150 && state.multiplier < 1.5) {
@@ -1839,7 +1839,7 @@ const Music = (() => {
     let pName = null, pRem = 0, pDur = 1, pCol = '#fff', pStatic = false;
     if (pw.slowT      > pRem) { pName = 'SLOW-MO';  pRem = pw.slowT;      pDur = pw.slowDur; pCol = '#00e5ff'; }
     if (pw.phaseT     > pRem) { pName = 'PHASE';    pRem = pw.phaseT;     pDur = PHASE_DUR;  pCol = '#c080ff'; }
-    if (pw.x2T        > pRem) { pName = 'SCORE ×' + pw.x2Mult; pRem = pw.x2T; pDur = pw.x2Dur; pCol = '#ff5ad6'; }
+    if (pw.x2T        > pRem) { pName = 'SCORE ×2'; pRem = pw.x2T; pDur = X2_DUR; pCol = '#ff5ad6'; }
     if (pw.blastT     > pRem) { pName = 'BLASTER';  pRem = pw.blastT;     pDur = BLAST_DUR;  pCol = '#ff7a3a'; }
     if (pw.warpInvuln > pRem) { pName = 'INVULN';   pRem = pw.warpInvuln; pDur = WARP_INVULN; pCol = '#3dff99'; }
     if (!pName && pw.shields > 0) { pName = pw.shields > 1 ? 'SHIELD ×' + pw.shields : 'SHIELD'; pStatic = true; pCol = '#ffd23f'; }
