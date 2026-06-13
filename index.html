@@ -1005,7 +1005,7 @@ const Music = (() => {
       case 'slowmo': pw.slowDur = Math.min(SLOW_MAX, SLOW_DUR + state.score / 250); pw.slowT = pw.slowDur; break;
       case 'phase':  pw.phaseT = PHASE_DUR; break;
       case 'x2':     pw.x2T = X2_DUR; break;
-      case 'shield': pw.shields++; break;
+      case 'shield': pw.shields = Math.min(3, pw.shields + 1); break;
       case 'blast':  pw.blastT = BLAST_DUR; break;
       case 'warp':   doWarp(); break;
     }
