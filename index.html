@@ -1127,8 +1127,8 @@ const Music = (() => {
   function gravityDeg(g) {
     const a = ((screenAngle() % 360) + 360) % 360;
     let lat, rest;
-    if (a === 90)       { lat = -g.y; rest = Math.hypot(g.x, g.z); }
-    else if (a === 270) { lat =  g.y; rest = Math.hypot(g.x, g.z); }
+    if (a === 90)       { lat =  g.y; rest = Math.hypot(g.x, g.z); }
+    else if (a === 270) { lat = -g.y; rest = Math.hypot(g.x, g.z); }
     else if (a === 180) { lat =  g.x; rest = Math.hypot(g.y, g.z); }
     else                { lat = -g.x; rest = Math.hypot(g.y, g.z); } // portrait
     return Math.atan2(lat, rest || 1) * 180 / Math.PI;
