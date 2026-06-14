@@ -1636,7 +1636,7 @@ const Music = (() => {
       const ramp = Math.pow(Math.min(state.score / 900, 1), 2.2);
       state.speed = state.baseSpeed + (state.maxSpeed - state.baseSpeed) * ramp;
       // keep velocity creeping up past the ramp cap so it never flatlines at 5×
-      if (state.score > 900) state.speed = Math.min(240, state.speed + (state.score - 900) * 0.02);
+      if (state.score > 900) state.speed = Math.min(240, state.speed + (state.score - 900) * 0.01);
       Music.setSpeed(ramp);
       const velMult = state.speed / state.baseSpeed;
       ui.vel.textContent = velMult.toFixed(1);
